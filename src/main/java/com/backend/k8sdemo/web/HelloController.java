@@ -12,9 +12,9 @@ import java.util.Map;
 public class HelloController {
 
     @GetMapping("/hello")
-    public ResponseEntity<String> sayHiToTheWorld(){
+    public ResponseEntity<Map<String, String>> sayHiToTheWorld(){
         Map<String, String> response = Map.of("message", "Hello from K8s Demo!",
                 "timestamp", Instant.now().toString());
-        return ResponseEntity.ok(response.toString());
+        return ResponseEntity.ok(response);
     }
 }
