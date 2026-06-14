@@ -1,1 +1,5 @@
-spring.application.name=k8s-demo
+spring:
+  application:
+    name: k8s-demo
+server:
+  port: 8080
