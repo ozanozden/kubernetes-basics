@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 1: Initialize Spring Boot API</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+            color: #24292e;
+        }
+        h1 {
+            border-bottom: 3px solid #0366d6;
+            padding-bottom: 10px;
+        }
+        h2 {
+            margin-top: 30px;
+            color: #0366d6;
+        }
+        code {
+            background: #f6f8fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background: #f6f8fa;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border: 1px solid #e1e4e8;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        .task {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .knowledge {
+            background: #d1ecf1;
+            border-left: 4px solid #0c5460;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .checkpoint {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        a {
+            color: #0366d6;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .feedback {
+            background: #e7f3ff;
+            border-left: 4px solid #0366d6;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Lesson 1: Initialize Your Spring Boot API</h1>
+
+    <p><strong>Goal:</strong> Create a simple REST endpoint and initialize git to track your progress.</p>
+
+    <div class="knowledge">
+        <h3>📚 Knowledge: What You're Building</h3>
+        <p>Before Docker and Kubernetes, you need a working application. You'll create a minimal Spring Boot REST API with a single endpoint that returns a JSON response. This is the foundation you'll containerize and orchestrate later.</p>
+        <p><strong>Key concepts:</strong></p>
+        <ul>
+            <li><strong>@RestController:</strong> Spring annotation that marks a class as a web controller returning data (not views)</li>
+            <li><strong>@GetMapping:</strong> Maps HTTP GET requests to a handler method</li>
+            <li><strong>ResponseEntity:</strong> Represents the entire HTTP response (status code, headers, body)</li>
+        </ul>
+        <p><strong>Read more:</strong> <a href="https://spring.io/guides/gs/rest-service" target="_blank">Building a RESTful Web Service (Spring.io)</a></p>
+    </div>
+
+    <h2>Your Tasks</h2>
+
+    <div class="task">
+        <h3>Task 1: Initialize Git</h3>
+        <p>First, let's track your progress. Run this command in your project directory:</p>
+        <pre><code>cd /Users/oz.oezden/IdeaProjects/private-projects/k8s-demo
+git init
+git add .
+git commit -m "Initial Spring Boot project setup"</code></pre>
+        <p><strong>Why:</strong> Git lets me (your teacher) see exactly what you've changed between lessons. Each commit is a checkpoint.</p>
+    </div>
+
+    <div class="task">
+        <h3>Task 2: Create a REST Controller</h3>
+        <p>Create a new file: <code>src/main/java/com/backend/k8sdemo/HelloController.java</code></p>
+        <p>Write a controller with:</p>
+        <ul>
+            <li>A <code>@RestController</code> annotation on the class</li>
+            <li>A <code>@GetMapping("/hello")</code> method that returns a ResponseEntity</li>
+            <li>The response should be a simple JSON object like: <code>{"message": "Hello from K8s Demo!", "timestamp": "..."}</code></li>
+        </ul>
+        <p><strong>Hint:</strong> You can use <code>Map.of()</code> to create the JSON response body, and <code>Instant.now()</code> for the timestamp.</p>
+    </div>
+
+    <div class="checkpoint">
+        <h3>✓ Checkpoint: Test Your Endpoint</h3>
+        <p>Before committing, verify your work:</p>
+        <ol>
+            <li>Start the application: <code>./gradlew bootRun</code></li>
+            <li>In another terminal, test the endpoint: <code>curl http://localhost:8080/hello</code></li>
+            <li>You should see your JSON response</li>
+            <li>Stop the app (Ctrl+C)</li>
+        </ol>
+    </div>
+
+    <div class="task">
+        <h3>Task 3: Commit Your Work</h3>
+        <p>Once your endpoint works, commit it:</p>
+        <pre><code>git add src/main/java/com/backend/k8sdemo/HelloController.java
+git commit -m "Add Hello REST endpoint"</code></pre>
+    </div>
+
+    <div class="feedback">
+        <h3>💬 Tell Your Teacher</h3>
+        <p>Once you've completed the tasks and committed your work, let me know! I'll review your git commits to check:</p>
+        <ul>
+            <li>Is the controller properly annotated?</li>
+            <li>Does the response structure make sense?</li>
+            <li>Is the code clean and minimal?</li>
+        </ul>
+        <p>If you get stuck or have questions, <strong>ask me</strong> - I'm here to help you understand, not just complete tasks.</p>
+    </div>
+
+    <h2>What's Next?</h2>
+    <p>After this lesson, you'll have a working Spring Boot API tracked in git. In Lesson 2, you'll learn Docker fundamentals and containerize this application.</p>
+
+    <div class="knowledge">
+        <h3>🤔 Reflection Questions</h3>
+        <p>Before moving on, think about:</p>
+        <ul>
+            <li>Why do we need a timestamp in the response? (Hint: it'll be useful for testing Kubernetes later)</li>
+            <li>What's the difference between <code>@RestController</code> and <code>@Controller</code>?</li>
+            <li>What HTTP status code does ResponseEntity return by default?</li>
+        </ul>
+    </div>
+
+</body>
+</html>
