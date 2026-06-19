@@ -35,3 +35,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Kubernetes Secrets ###
+# NEVER commit real secrets! Demo secrets (with fake credentials) are OK.
+# k8s/secret.yaml

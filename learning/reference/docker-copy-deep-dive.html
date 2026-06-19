@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 2b: Docker COPY Deep Dive</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+            color: #24292e;
+        }
+        h1 {
+            border-bottom: 3px solid #0366d6;
+            padding-bottom: 10px;
+        }
+        h2 {
+            margin-top: 30px;
+            color: #0366d6;
+        }
+        code {
+            background: #f6f8fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background: #f6f8fa;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border: 1px solid #e1e4e8;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        .knowledge {
+            background: #d1ecf1;
+            border-left: 4px solid #0c5460;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .example {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ff6b6b;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .comparison {
+            background: #e7f3ff;
+            border-left: 4px solid #0366d6;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #e1e4e8;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background: #f6f8fa;
+            font-weight: 600;
+        }
+        .diagram {
+            background: #f6f8fa;
+            padding: 15px;
+            margin: 20px 0;
+            border: 2px solid #0366d6;
+            font-family: monospace;
+            white-space: pre;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Lesson 2b: Docker COPY Deep Dive</h1>
+
+    <p><strong>Goal:</strong> Understand exactly how COPY works, why order matters, and how .dockerignore filters files.</p>
+
+    <div class="knowledge">
+        <h3>📚 The Build Context</h3>
+        <p>When you run <code>docker build .</code>, the <code>.</code> is your <strong>build context</strong> - the directory Docker sends to the daemon.</p>
+
+        <p><strong>What happens:</strong></p>
+        <ol>
+            <li>Docker packages your entire project directory (excluding .dockerignore entries)</li>
+            <li>Sends this package to the Docker daemon</li>
+            <li>The daemon can now access these files for COPY/ADD instructions</li>
+        </ol>
+
+        <div class="diagram">
+Your machine:                    Docker daemon:
+/k8s-demo/                      Build context (temp):
+├── src/                        ├── src/
+├── build.gradle               ├── build.gradle
+├── Dockerfile                 ├── Dockerfile
+├── .git/          ─────────→  (not sent - in .dockerignore)
+├── .gradle/       ─────────→  (not sent - in .dockerignore)
+└── learning/      ─────────→  (not sent - in .dockerignore)
+        </div>
+
+        <p><strong>Why this matters:</strong> Large build contexts = slow builds. If you have a 2GB <code>.git</code> directory, Docker sends all 2GB even if you never COPY it!</p>
+    </div>
+
+    <h2>Understanding COPY Syntax</h2>
+
+    <div class="knowledge">
+        <h3>Basic Format</h3>
+        <pre><code>COPY &lt;src&gt;... &lt;dest&gt;</code></pre>
+
+        <p><strong>Rules:</strong></p>
+        <ul>
+            <li><code>&lt;src&gt;</code> is relative to the <strong>build context</strong> (not your Dockerfile location)</li>
+            <li><code>&lt;dest&gt;</code> is an absolute path in the container, OR relative to WORKDIR</li>
+            <li>If <code>&lt;dest&gt;</code> ends with <code>/</code>, it's treated as a directory</li>
+            <li>If <code>&lt;dest&gt;</code> doesn't exist, Docker creates it</li>
+        </ul>
+    </div>
+
+    <div class="example">
+        <h3>Example 1: Copy Single File</h3>
+        <pre><code>WORKDIR /app
+COPY build.gradle .</code></pre>
+
+        <p><strong>Result:</strong> Copies <code>build.gradle</code> from build context to <code>/app/build.gradle</code> in container</p>
+
+        <p><strong>Explanation:</strong></p>
+        <ul>
+            <li><code>build.gradle</code> = source file in your project root</li>
+            <li><code>.</code> = current WORKDIR (<code>/app</code>)</li>
+            <li>Destination becomes <code>/app/build.gradle</code></li>
+        </ul>
+    </div>
+
+    <div class="example">
+        <h3>Example 2: Copy Multiple Files</h3>
+        <pre><code>WORKDIR /app
+COPY build.gradle settings.gradle gradlew ./</code></pre>
+
+        <p><strong>Result:</strong> Copies all three files to <code>/app/</code></p>
+
+        <p><strong>Rules for multiple sources:</strong></p>
+        <ul>
+            <li>Last argument MUST be a directory (end with <code>/</code> or be <code>.</code>)</li>
+            <li>All previous arguments are source files/directories</li>
+            <li>Files keep their names in destination</li>
+        </ul>
+    </div>
+
+    <div class="example">
+        <h3>Example 3: Copy Directory</h3>
+        <pre><code>WORKDIR /app
+COPY src ./src</code></pre>
+
+        <p><strong>Result:</strong> Copies <code>src/</code> directory to <code>/app/src/</code></p>
+
+        <p><strong>What gets copied:</strong></p>
+        <div class="diagram">
+Build context:          Container:
+src/                    /app/src/
+├── main/               ├── main/
+│   └── java/           │   └── java/
+└── test/               └── test/
+        </div>
+    </div>
+
+    <div class="example">
+        <h3>Example 4: Copy Everything</h3>
+        <pre><code>WORKDIR /app
+COPY . .</code></pre>
+
+        <p><strong>Result:</strong> Copies entire build context to <code>/app/</code></p>
+
+        <p><strong>What this means:</strong></p>
+        <ul>
+            <li>First <code>.</code> = source (build context root)</li>
+            <li>Second <code>.</code> = destination (WORKDIR = /app)</li>
+            <li>Copies ALL files/directories from build context</li>
+            <li><strong>Respects .dockerignore</strong> - excluded files won't be copied</li>
+        </ul>
+
+        <div class="diagram">
+Build context (after .dockerignore):    Container:
+/k8s-demo/                              /app/
+├── src/                                ├── src/
+├── build.gradle                        ├── build.gradle
+├── gradle/                             ├── gradle/
+├── Dockerfile                          ├── Dockerfile
+└── gradlew                             └── gradlew
+
+NOT copied (.dockerignore):
+├── .git/
+├── .gradle/
+└── learning/
+        </div>
+    </div>
+
+    <h2>Understanding .dockerignore</h2>
+
+    <div class="knowledge">
+        <h3>What is .dockerignore?</h3>
+        <p>A file that tells Docker which files/directories to <strong>exclude from the build context</strong>. Works like <code>.gitignore</code>.</p>
+
+        <p><strong>Your .dockerignore:</strong></p>
+        <pre><code>.git
+.gradle
+build
+.idea
+*.md
+learning/</code></pre>
+
+        <h4>Pattern Matching:</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Pattern</th>
+                    <th>Matches</th>
+                    <th>Example</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>.git</code></td>
+                    <td>Exact directory name</td>
+                    <td><code>.git/</code></td>
+                </tr>
+                <tr>
+                    <td><code>*.md</code></td>
+                    <td>All .md files (any depth)</td>
+                    <td><code>README.md</code>, <code>docs/guide.md</code></td>
+                </tr>
+                <tr>
+                    <td><code>learning/</code></td>
+                    <td>Directory and contents</td>
+                    <td><code>learning/lessons/</code></td>
+                </tr>
+                <tr>
+                    <td><code>**/*.log</code></td>
+                    <td>All .log files at any depth</td>
+                    <td><code>app.log</code>, <code>logs/error.log</code></td>
+                </tr>
+                <tr>
+                    <td><code>!important.md</code></td>
+                    <td>Exception (include this file)</td>
+                    <td>Overrides <code>*.md</code> pattern</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="comparison">
+        <h3>With vs Without .dockerignore</h3>
+
+        <h4>❌ Without .dockerignore:</h4>
+        <pre><code>$ docker build .
+Sending build context to Docker daemon  245.7MB  ← SLOW!</code></pre>
+
+        <p>Includes: .git/ (200MB), .gradle/ (30MB), learning/ (5MB), build/ (10MB)</p>
+
+        <h4>✅ With .dockerignore:</h4>
+        <pre><code>$ docker build .
+Sending build context to Docker daemon  156kB    ← FAST!</code></pre>
+
+        <p>Only includes: src/, gradle/, build files, Dockerfile</p>
+
+        <p><strong>Speed improvement:</strong> 245MB → 156KB (1500x faster!)</p>
+    </div>
+
+    <h2>Why COPY Order Matters (Layer Caching)</h2>
+
+    <div class="knowledge">
+        <h3>Docker Layer Caching</h3>
+        <p>Each Dockerfile instruction creates a <strong>layer</strong>. Docker caches layers and reuses them if nothing changed.</p>
+
+        <p><strong>Cache invalidation rule:</strong> When a layer changes, all subsequent layers are invalidated.</p>
+    </div>
+
+    <div class="comparison">
+        <h3>❌ Bad Order (cache-unfriendly)</h3>
+        <pre><code>FROM gradle:8-jdk21 AS build
+WORKDIR /app
+
+# ❌ Copy everything at once
+COPY . .
+
+# Gradle downloads dependencies (slow)
+RUN ./gradlew bootJar --no-daemon</code></pre>
+
+        <p><strong>Problem:</strong> Every code change invalidates COPY layer → Gradle re-downloads all dependencies</p>
+        <p><strong>Build time after changing one line of code:</strong> ~2-3 minutes</p>
+    </div>
+
+    <div class="comparison">
+        <h3>✅ Good Order (cache-friendly)</h3>
+        <pre><code>FROM gradle:8-jdk21 AS build
+WORKDIR /app
+
+# ✅ Copy dependency files first
+COPY build.gradle settings.gradle ./
+COPY gradle ./gradle
+COPY gradlew ./
+
+# Download dependencies (cached if build.gradle unchanged)
+RUN ./gradlew dependencies --no-daemon
+
+# ✅ Copy source code last (changes frequently)
+COPY src ./src
+
+# Build (cached if src unchanged)
+RUN ./gradlew bootJar --no-daemon</code></pre>
+
+        <p><strong>Benefit:</strong> Changing Java code doesn't invalidate dependency download layer</p>
+        <p><strong>Build time after changing one line of code:</strong> ~30 seconds</p>
+    </div>
+
+    <div class="knowledge">
+        <h3>Our Simplified Approach</h3>
+        <pre><code>COPY . .</code></pre>
+
+        <p><strong>Why we used this:</strong></p>
+        <ul>
+            <li>Simpler for learning (fewer lines)</li>
+            <li>.dockerignore protects us from copying unwanted files</li>
+            <li>For this learning project, build time isn't critical</li>
+        </ul>
+
+        <p><strong>Trade-off:</strong> Simplicity vs cache optimization. For production, use the multi-step COPY pattern above.</p>
+    </div>
+
+    <h2>COPY vs ADD</h2>
+
+    <div class="knowledge">
+        <p>There's also an <code>ADD</code> instruction. Here's when to use which:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>COPY</th>
+                    <th>ADD</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Copy local files</td>
+                    <td>✅ Yes</td>
+                    <td>✅ Yes</td>
+                </tr>
+                <tr>
+                    <td>Copy from URL</td>
+                    <td>❌ No</td>
+                    <td>✅ Yes</td>
+                </tr>
+                <tr>
+                    <td>Auto-extract .tar files</td>
+                    <td>❌ No</td>
+                    <td>✅ Yes</td>
+                </tr>
+                <tr>
+                    <td>Recommended</td>
+                    <td>✅ Default choice</td>
+                    <td>⚠️ Only when needed</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p><strong>Best practice:</strong> Use COPY unless you specifically need ADD's features. COPY is more transparent.</p>
+    </div>
+
+    <h2>Multi-stage COPY</h2>
+
+    <div class="knowledge">
+        <h3>COPY --from=stage</h3>
+        <p>In multi-stage builds, you can copy from earlier stages:</p>
+
+        <pre><code>FROM gradle:8-jdk21 AS build
+WORKDIR /app
+COPY . .
+RUN ./gradlew bootJar --no-daemon
+
+FROM eclipse-temurin:21-jre AS runtime
+WORKDIR /app
+# Copy from the "build" stage
+COPY --from=build /app/build/libs/*.jar /app/app.jar
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]</code></pre>
+
+        <p><strong>What happens:</strong></p>
+        <ol>
+            <li>Build stage creates JAR in <code>/app/build/libs/</code></li>
+            <li>Runtime stage copies ONLY the JAR from build stage</li>
+            <li>Build tools (Gradle, source code) stay in build stage</li>
+            <li>Final image contains only JRE + JAR (much smaller!)</li>
+        </ol>
+
+        <p><strong>Size comparison:</strong></p>
+        <ul>
+            <li>Build stage image: ~800MB (Gradle + JDK + source)</li>
+            <li>Final runtime image: ~320MB (JRE + JAR only)</li>
+        </ul>
+    </div>
+
+    <div class="warning">
+        <h3>⚠️ Common COPY Mistakes</h3>
+
+        <h4>1. Wrong source path</h4>
+        <pre><code>❌ COPY /src ./src       # Absolute path - looks in filesystem root!
+✅ COPY src ./src        # Relative to build context</code></pre>
+
+        <h4>2. Forgetting trailing slash</h4>
+        <pre><code>❌ COPY src /app/src     # Creates /app/src as a file if src doesn't exist!
+✅ COPY src /app/src/    # Always creates as directory</code></pre>
+
+        <h4>3. Wildcard confusion</h4>
+        <pre><code>❌ COPY *.jar /app/      # Only works at build context root
+✅ COPY build/libs/*.jar /app/</code></pre>
+
+        <h4>4. Not using .dockerignore</h4>
+        <pre><code>❌ COPY . .              # Without .dockerignore = copies .git, node_modules, etc.
+✅ Create .dockerignore first!</code></pre>
+    </div>
+
+    <div class="knowledge">
+        <h3>🤔 Key Takeaways</h3>
+        <ul>
+            <li><strong>Build context</strong> is the directory sent to Docker daemon</li>
+            <li><strong>.dockerignore</strong> filters build context before sending (faster builds)</li>
+            <li><strong>COPY . .</strong> copies entire build context (minus .dockerignore entries) to WORKDIR</li>
+            <li><strong>Layer caching</strong> is why copy order matters (copy rarely-changed files first)</li>
+            <li><strong>Multi-stage COPY</strong> lets you copy artifacts between build stages</li>
+            <li><strong>Always use COPY</strong> unless you specifically need ADD's features</li>
+        </ul>
+    </div>
+
+    <div class="example">
+        <h3>🧪 Experiment: See Build Context Size</h3>
+        <p>Try this to understand the impact of .dockerignore:</p>
+
+        <h4>1. Temporarily rename .dockerignore:</h4>
+        <pre><code>mv .dockerignore .dockerignore.backup
+docker build .</code></pre>
+        <p>Notice the "Sending build context" line - shows total size sent.</p>
+
+        <h4>2. Restore .dockerignore and rebuild:</h4>
+        <pre><code>mv .dockerignore.backup .dockerignore
+docker build .</code></pre>
+        <p>Compare the context size - should be much smaller!</p>
+    </div>
+
+</body>
+</html>

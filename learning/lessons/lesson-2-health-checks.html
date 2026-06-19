@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 2: Health Checks</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 40px; border-left: 4px solid #3498db; padding-left: 15px; }
+        h3 { color: #555; margin-top: 30px; }
+        .concept-box {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        .problem-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        .experiment-box {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        .warning-box {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+        }
+        .yaml-comment { color: #75715e; }
+        .yaml-key { color: #66d9ef; }
+        .yaml-string { color: #e6db74; }
+        .yaml-number { color: #ae81ff; }
+        ul, ol { margin-left: 20px; }
+        li { margin: 8px 0; }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background: #3498db;
+            color: white;
+        }
+        tr:nth-child(even) { background: #f9f9f9; }
+    </style>
+</head>
+<body>
+    <h1>🏥 Lesson 2: Health Checks (Liveness & Readiness Probes)</h1>
+
+    <div class="concept-box">
+        <strong>What you'll learn:</strong>
+        <ul>
+            <li>How Kubernetes knows if your app is alive vs ready</li>
+            <li>The difference between liveness and readiness probes</li>
+            <li>How to configure health checks in Kubernetes</li>
+            <li>Why health probes prevent broken pods from serving traffic</li>
+        </ul>
+        <strong>Time:</strong> ~15 minutes
+    </div>
+
+    <div class="problem-box">
+        <strong>🤔 The Problem</strong><br><br>
+        Imagine your app crashes internally - maybe an OutOfMemoryError or a deadlock. The container is still running, so Kubernetes thinks everything is fine. Traffic keeps flowing to a broken pod.
+        <br><br>
+        Or consider startup: your app takes 30 seconds to boot. Kubernetes starts sending traffic immediately, and requests fail for 30 seconds.
+        <br><br>
+        <strong>How does Kubernetes know your app is actually healthy?</strong>
+    </div>
+
+    <div class="concept-box">
+        <strong>💡 The Solution: Health Probes</strong><br><br>
+        Kubernetes offers two types of health checks:
+        <br><br>
+        <table>
+            <tr>
+                <th>Probe Type</th>
+                <th>Purpose</th>
+                <th>What Happens on Failure</th>
+            </tr>
+            <tr>
+                <td><strong>Liveness Probe</strong></td>
+                <td>Is the app alive (not crashed/deadlocked)?</td>
+                <td>Pod is <strong>killed and restarted</strong></td>
+            </tr>
+            <tr>
+                <td><strong>Readiness Probe</strong></td>
+                <td>Is the app ready to serve traffic?</td>
+                <td>Pod is <strong>removed from service</strong> (no traffic) but not killed</td>
+            </tr>
+        </table>
+        <br>
+        <strong>Key Difference:</strong>
+        <ul>
+            <li><strong>Liveness</strong> = "Are you dead?" (restart if broken)</li>
+            <li><strong>Readiness</strong> = "Are you ready?" (wait if not ready)</li>
+        </ul>
+    </div>
+
+    <hr>
+
+    <h2>Step 1: Add Spring Boot Actuator Dependency</h2>
+
+    <p>Spring Boot Actuator provides production-ready health endpoints out of the box. First, add it to <code>build.gradle</code>:</p>
+
+    <pre><code>dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    <span class="yaml-comment">// Add Spring Boot Actuator for health endpoints</span>
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}</code></pre>
+
+    <div class="concept-box">
+        <strong>What is Spring Boot Actuator?</strong><br><br>
+        Actuator adds production-ready features to your Spring Boot app:
+        <ul>
+            <li><strong>Health checks</strong> - <code>/actuator/health</code> endpoints</li>
+            <li><strong>Metrics</strong> - Memory usage, request counts, etc.</li>
+            <li><strong>Info</strong> - Application metadata</li>
+        </ul>
+        For Kubernetes, we only need the health check endpoints.
+    </div>
+
+    <h2>Step 2: Configure Health Endpoints</h2>
+
+    <p>Create <code>src/main/resources/application.yaml</code> with this configuration:</p>
+
+    <pre><code>management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true</code></pre>
+
+    <div class="concept-box">
+        <strong>What do these properties do?</strong>
+        <ul>
+            <li><code>management.endpoints.web.exposure.include</code> - Which actuator endpoints to expose over HTTP</li>
+            <li><code>management.endpoint.health.probes.enabled=true</code> - Enable Kubernetes-style liveness/readiness probes</li>
+            <li><code>management.health.livenessState.enabled=true</code> - Expose <code>/actuator/health/liveness</code></li>
+            <li><code>management.health.readinessState.enabled=true</code> - Expose <code>/actuator/health/readiness</code></li>
+        </ul>
+        These endpoints return HTTP 200 (OK) or 503 (Service Unavailable) based on app state.
+    </div>
+
+    <h2>Step 3: Test Locally First</h2>
+
+    <p>Before deploying to Kubernetes, verify the health endpoints work locally:</p>
+
+    <pre><code><span class="yaml-comment"># Start the app</span>
+./gradlew bootRun
+
+<span class="yaml-comment"># In another terminal, test the endpoints:</span>
+curl http://localhost:8080/actuator/health
+curl http://localhost:8080/actuator/health/liveness
+curl http://localhost:8080/actuator/health/readiness</code></pre>
+
+    <p>You should see JSON responses like:</p>
+    <pre><code>{
+  "status": "UP",
+  "groups": ["liveness", "readiness"]
+}</code></pre>
+
+    <p>Press <code>Ctrl+C</code> to stop the app once verified.</p>
+
+    <div class="warning-box">
+        <strong>⚠️ Important: Don't Skip Local Testing!</strong><br><br>
+        Always test code changes locally before deploying to Kubernetes. This catches issues early and saves time debugging pod crashes.
+    </div>
+
+    <h2>Step 4: Rebuild Docker Image</h2>
+
+    <p>Now that the code has changed (added actuator), rebuild the Docker image:</p>
+
+    <pre><code><span class="yaml-comment"># 1. Clean and rebuild the JAR</span>
+./gradlew clean bootJar
+
+<span class="yaml-comment"># 2. Build new Docker image</span>
+docker build -t k8s-demo:latest .
+
+<span class="yaml-comment"># 3. Load into minikube</span>
+minikube image load k8s-demo:latest</code></pre>
+
+    <div class="concept-box">
+        <strong>Why these steps?</strong>
+        <ul>
+            <li><code>./gradlew clean bootJar</code> - Compiles Java code and packages it into a JAR file</li>
+            <li><code>docker build</code> - Creates a new Docker image with the new JAR</li>
+            <li><code>minikube image load</code> - Copies the image into minikube's local registry</li>
+        </ul>
+        Without these steps, Kubernetes will use the old image without actuator endpoints!
+    </div>
+
+    <h2>Step 5: Update Deployment with Health Probes</h2>
+
+    <p>Now update <code>k8s/deployment.yaml</code> to tell Kubernetes about the health endpoints:</p>
+
+    <pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-demo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: k8s-demo
+  template:
+    metadata:
+      labels:
+        app: k8s-demo
+    spec:
+      containers:
+      - name: k8s-demo
+        image: k8s-demo:latest
+        ports:
+        - containerPort: 8080
+        <span class="yaml-comment"># NEW: Liveness probe - restart if unhealthy</span>
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 30    <span class="yaml-comment"># Wait 30s after container starts</span>
+          periodSeconds: 10            <span class="yaml-comment"># Check every 10 seconds</span>
+          timeoutSeconds: 5            <span class="yaml-comment"># Probe must respond within 5s</span>
+          failureThreshold: 3          <span class="yaml-comment"># Kill pod after 3 consecutive failures</span>
+        <span class="yaml-comment"># NEW: Readiness probe - remove from service if not ready</span>
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 10    <span class="yaml-comment"># Check readiness sooner than liveness</span>
+          periodSeconds: 5             <span class="yaml-comment"># Check more frequently (every 5s)</span>
+          timeoutSeconds: 3            <span class="yaml-comment"># Faster timeout</span>
+          failureThreshold: 3          <span class="yaml-comment"># Remove from service after 3 failures</span></code></pre>
+
+    <div class="concept-box">
+        <strong>Understanding the Fields:</strong><br><br>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>What It Means</th>
+                <th>Why We Need It</th>
+            </tr>
+            <tr>
+                <td><code>httpGet.path</code></td>
+                <td>HTTP endpoint to call</td>
+                <td>Tells K8s where to check health</td>
+            </tr>
+            <tr>
+                <td><code>httpGet.port</code></td>
+                <td>Port to probe</td>
+                <td>Must match your app's port</td>
+            </tr>
+            <tr>
+                <td><code>initialDelaySeconds</code></td>
+                <td>Wait time before first probe</td>
+                <td>Gives app time to start up (readiness < liveness)</td>
+            </tr>
+            <tr>
+                <td><code>periodSeconds</code></td>
+                <td>How often to probe</td>
+                <td>Readiness should check more frequently</td>
+            </tr>
+            <tr>
+                <td><code>timeoutSeconds</code></td>
+                <td>How long to wait for response</td>
+                <td>Prevent hanging on slow responses</td>
+            </tr>
+            <tr>
+                <td><code>failureThreshold</code></td>
+                <td>Failures before taking action</td>
+                <td>Avoid false positives from transient issues</td>
+            </tr>
+        </table>
+    </div>
+
+    <h2>Step 6: Deploy to Kubernetes</h2>
+
+    <pre><code><span class="yaml-comment"># Apply the updated deployment</span>
+kubectl apply -f k8s/deployment.yaml
+
+<span class="yaml-comment"># Force Kubernetes to use the new image</span>
+kubectl rollout restart deployment/k8s-demo
+
+<span class="yaml-comment"># Watch the rollout</span>
+kubectl rollout status deployment/k8s-demo</code></pre>
+
+    <div class="concept-box">
+        <strong>Why <code>kubectl rollout restart</code>?</strong><br><br>
+        Even though we loaded a new image, Kubernetes won't automatically pull it because the tag (<code>:latest</code>) hasn't changed. The restart command forces Kubernetes to recreate pods with the new image.
+        <br><br>
+        <strong>Alternative:</strong> Use version tags (<code>:v1</code>, <code>:v2</code>) and update the deployment YAML. We use <code>:latest</code> + restart for simplicity during learning.
+    </div>
+
+    <p>Watch the rolling update respect readiness probes - pods won't receive traffic until ready!</p>
+
+    <div class="experiment-box">
+        <strong>🧪 Experiment: See Health Probes in Action</strong><br><br>
+        <ol>
+            <li><strong>Watch pod readiness during rollout:</strong>
+                <pre><code>kubectl get pods -w</code></pre>
+                Notice pods show <code>0/1 READY</code> initially, then <code>1/1 READY</code> after readiness probe passes.
+            </li>
+            <li><strong>Check probe configuration:</strong>
+                <pre><code>kubectl describe pod &lt;pod-name&gt; | grep -A 10 "Liveness\|Readiness"</code></pre>
+                You'll see the configured probe settings and their status.
+            </li>
+            <li><strong>Delete a pod and watch self-healing:</strong>
+                <pre><code>kubectl delete pod &lt;pod-name&gt;
+kubectl get pods -w</code></pre>
+                Kubernetes immediately creates a new pod. Readiness probe prevents traffic until it's ready!
+            </li>
+            <li><strong>Check events to see probe activity:</strong>
+                <pre><code>kubectl get events --sort-by='.lastTimestamp' | grep -i probe</code></pre>
+            </li>
+        </ol>
+    </div>
+
+    <h2>Why Liveness vs Readiness?</h2>
+
+    <div class="concept-box">
+        <strong>Real-World Scenarios:</strong><br><br>
+
+        <strong>Liveness Probe Use Case:</strong><br>
+        Your app deadlocks. It's running but not responding. Liveness probe fails → Kubernetes restarts the pod → Problem solved.
+        <br><br>
+
+        <strong>Readiness Probe Use Case:</strong><br>
+        Your app is connecting to a database during startup. It's alive but not ready to serve requests. Readiness probe fails → Kubernetes doesn't send traffic → Once DB connection succeeds, readiness passes → Traffic starts flowing.
+        <br><br>
+
+        <strong>Why both?</strong><br>
+        Readiness is temporary (waiting for resources). Liveness is permanent (app is broken and needs restart). Using both gives Kubernetes the full picture of your app's health.
+    </div>
+
+    <h2>Common Mistakes</h2>
+
+    <div class="warning-box">
+        <strong>⚠️ Avoid These Pitfalls:</strong>
+        <ul>
+            <li><strong>initialDelaySeconds too short:</strong> Probe fails during startup → pod killed before it finishes booting → crash loop</li>
+            <li><strong>Same probe for liveness and readiness:</strong> Temporary issues (like DB connection loss) trigger liveness → pod restart → makes problem worse</li>
+            <li><strong>No timeout:</strong> Slow probes can delay pod restarts or traffic routing</li>
+            <li><strong>failureThreshold = 1:</strong> One transient blip kills your pod → unstable deployment</li>
+        </ul>
+    </div>
+
+    <h2>Summary</h2>
+
+    <div class="concept-box">
+        <strong>✅ What you learned:</strong>
+        <ul>
+            <li><strong>Liveness probes</strong> detect broken pods and restart them automatically</li>
+            <li><strong>Readiness probes</strong> prevent traffic to pods that aren't ready yet</li>
+            <li><strong>Probe timing</strong> (initialDelay, period, timeout, failureThreshold) fine-tunes behavior</li>
+            <li><strong>Self-healing</strong> - Kubernetes keeps your app healthy without manual intervention</li>
+        </ul>
+
+        <strong>Key Commands:</strong>
+        <pre><code>kubectl describe pod &lt;name&gt; | grep -A 10 Liveness
+kubectl get events --sort-by='.lastTimestamp'
+kubectl get pods -w</code></pre>
+    </div>
+
+    <hr>
+
+    <p><strong>Next Lesson:</strong> <a href="lesson-3-resources.html">Resource Management (CPU & Memory Limits)</a></p>
+
+    <p><strong>🎉 Great job!</strong> Your app now self-heals and doesn't serve traffic until ready.</p>
+
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 3: Resource Management</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 40px; border-left: 4px solid #3498db; padding-left: 15px; }
+        h3 { color: #555; margin-top: 30px; }
+        .concept-box {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        .problem-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        .experiment-box {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        .warning-box {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+        }
+        .yaml-comment { color: #75715e; }
+        ul, ol { margin-left: 20px; }
+        li { margin: 8px 0; }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background: #3498db;
+            color: white;
+        }
+        tr:nth-child(even) { background: #f9f9f9; }
+    </style>
+</head>
+<body>
+    <h1>⚙️ Lesson 3: Resource Management (CPU & Memory Limits)</h1>
+
+    <div class="concept-box">
+        <strong>What you'll learn:</strong>
+        <ul>
+            <li>How to prevent resource starvation in Kubernetes</li>
+            <li>The difference between requests and limits</li>
+            <li>What happens when a pod exceeds memory limits (OOMKilled)</li>
+            <li>How Kubernetes schedules pods based on resources</li>
+        </ul>
+        <strong>Time:</strong> ~10 minutes
+    </div>
+
+    <div class="problem-box">
+        <strong>🤔 The Problem</strong><br><br>
+        A pod with a memory leak can consume all available RAM on the node, causing:
+        <ul>
+            <li>Other pods to be evicted (killed)</li>
+            <li>Node crashes</li>
+            <li>Cascading failures across your cluster</li>
+        </ul>
+        Similarly, a CPU-hungry pod can starve other workloads.
+        <br><br>
+        <strong>How do you prevent one misbehaving pod from taking down the cluster?</strong>
+    </div>
+
+    <div class="concept-box">
+        <strong>💡 The Solution: Resource Requests & Limits</strong><br><br>
+        Kubernetes lets you specify two resource constraints:
+        <br><br>
+        <table>
+            <tr>
+                <th>Type</th>
+                <th>Purpose</th>
+                <th>What Happens</th>
+            </tr>
+            <tr>
+                <td><strong>Requests</strong></td>
+                <td>Minimum resources guaranteed</td>
+                <td>K8s won't schedule pod on a node without this much available</td>
+            </tr>
+            <tr>
+                <td><strong>Limits</strong></td>
+                <td>Maximum resources allowed</td>
+                <td>Pod is throttled (CPU) or killed (memory) if exceeded</td>
+            </tr>
+        </table>
+        <br>
+        <strong>Example:</strong> If you request 256Mi memory, K8s guarantees your pod gets at least that much. If you limit to 512Mi, the pod is killed if it tries to use more.
+    </div>
+
+    <hr>
+
+    <h2>Step 1: Add Resource Constraints</h2>
+
+    <p>Update <code>k8s/deployment.yaml</code> to add resource requests and limits:</p>
+
+    <pre><code>spec:
+  containers:
+  - name: k8s-demo
+    image: k8s-demo:latest
+    ports:
+    - containerPort: 8080
+    <span class="yaml-comment"># Resource requests and limits</span>
+    resources:
+      requests:
+        memory: "256Mi"     <span class="yaml-comment"># Minimum memory needed</span>
+        cpu: "250m"         <span class="yaml-comment"># 0.25 CPU cores minimum</span>
+      limits:
+        memory: "512Mi"     <span class="yaml-comment"># Maximum memory allowed</span>
+        cpu: "500m"         <span class="yaml-comment"># 0.5 CPU cores maximum</span>
+    livenessProbe:
+      httpGet:
+        path: /actuator/health/liveness
+        port: 8080
+      initialDelaySeconds: 30
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /actuator/health/readiness
+        port: 8080
+      initialDelaySeconds: 10
+      periodSeconds: 5</code></pre>
+
+    <div class="concept-box">
+        <strong>Understanding CPU & Memory Units:</strong><br><br>
+        <strong>CPU:</strong>
+        <ul>
+            <li><code>1</code> = 1 full CPU core</li>
+            <li><code>500m</code> = 0.5 cores (m = millicores, 1000m = 1 core)</li>
+            <li><code>250m</code> = 0.25 cores</li>
+        </ul>
+        <strong>Memory:</strong>
+        <ul>
+            <li><code>Mi</code> = Mebibytes (1024-based: 256Mi = 268,435,456 bytes)</li>
+            <li><code>M</code> = Megabytes (1000-based: 256M = 256,000,000 bytes)</li>
+            <li>Common: <code>128Mi</code>, <code>256Mi</code>, <code>512Mi</code>, <code>1Gi</code> (1 Gibibyte)</li>
+        </ul>
+        <strong>Why requests < limits?</strong><br>
+        Allows bursting. Your app normally uses 256Mi but can temporarily spike to 512Mi. Requests ensure scheduling; limits prevent runaway resource usage.
+    </div>
+
+    <div class="warning-box">
+        <strong>⚠️ What Happens When Limits Are Exceeded?</strong><br><br>
+        <strong>CPU:</strong> Pod is <strong>throttled</strong> (slowed down but not killed)<br>
+        <strong>Memory:</strong> Pod is <strong>OOMKilled</strong> (Out Of Memory killed) and restarted<br><br>
+        You'll see this in pod events: <code>Reason: OOMKilled</code>
+    </div>
+
+    <h2>Step 2: Apply and Verify</h2>
+
+    <pre><code>kubectl apply -f k8s/deployment.yaml
+kubectl rollout status deployment/k8s-demo</code></pre>
+
+    <div class="experiment-box">
+        <strong>🧪 Experiment: See Resource Limits in Action</strong><br><br>
+        <ol>
+            <li><strong>Check resource allocation:</strong>
+                <pre><code>kubectl describe pod &lt;pod-name&gt; | grep -A 5 "Limits\|Requests"</code></pre>
+                You'll see the configured requests and limits for each container.
+            </li>
+            <li><strong>Check scheduling decisions:</strong>
+                <pre><code>kubectl get pod &lt;pod-name&gt; -o yaml | grep -A 10 resources</code></pre>
+            </li>
+            <li><strong>Watch pod events for resource issues:</strong>
+                <pre><code>kubectl get events --sort-by='.lastTimestamp' | grep -i oom</code></pre>
+                (You won't see OOMKilled unless a pod exceeds memory limits)
+            </li>
+        </ol>
+    </div>
+
+    <h2>How Kubernetes Uses Requests & Limits</h2>
+
+    <div class="concept-box">
+        <strong>Scheduling (Requests):</strong><br>
+        When you create a pod requesting 256Mi memory, Kubernetes finds a node with at least 256Mi available. If no node has enough, the pod stays <code>Pending</code>.
+        <br><br>
+
+        <strong>Enforcement (Limits):</strong><br>
+        Once running, if the pod tries to use more than 512Mi, the kernel kills it (OOMKilled). Kubernetes then restarts it (if liveness probe is configured).
+        <br><br>
+
+        <strong>Why both?</strong><br>
+        - <strong>Requests</strong> = "What I need to run"<br>
+        - <strong>Limits</strong> = "What I'm allowed to spike to"<br>
+        - Without limits: one pod can hog all resources<br>
+        - Without requests: Kubernetes might schedule too many pods on one node
+    </div>
+
+    <h2>Best Practices</h2>
+
+    <div class="concept-box">
+        <strong>✅ Good Resource Configuration:</strong>
+        <ul>
+            <li><strong>Set both requests and limits</strong> - Prevents scheduling issues and resource starvation</li>
+            <li><strong>Requests = typical usage</strong> - Based on monitoring/profiling</li>
+            <li><strong>Limits = 2x requests</strong> - Allows bursting without being wasteful</li>
+            <li><strong>Start conservative</strong> - You can always increase later</li>
+        </ul>
+
+        <strong>❌ Common Mistakes:</strong>
+        <ul>
+            <li><strong>No limits</strong> - One pod can crash the node</li>
+            <li><strong>Limits too low</strong> - Constant OOMKills during normal operation</li>
+            <li><strong>Requests too high</strong> - Pods stay Pending, wasting cluster capacity</li>
+            <li><strong>Requests = Limits</strong> - No bursting allowed (OK for some workloads, restrictive for others)</li>
+        </ul>
+    </div>
+
+    <h2>Summary</h2>
+
+    <div class="concept-box">
+        <strong>✅ What you learned:</strong>
+        <ul>
+            <li><strong>Requests</strong> guarantee minimum resources for scheduling</li>
+            <li><strong>Limits</strong> prevent runaway resource consumption</li>
+            <li><strong>CPU limits</strong> throttle pods, <strong>memory limits</strong> kill pods (OOMKilled)</li>
+            <li><strong>Resource management</strong> is critical for cluster stability</li>
+        </ul>
+
+        <strong>Key Commands:</strong>
+        <pre><code>kubectl describe pod &lt;name&gt; | grep -A 5 "Limits\|Requests"
+kubectl get events --sort-by='.lastTimestamp'
+kubectl describe node</code></pre>
+    </div>
+
+    <hr>
+
+    <p><strong>Next Lesson:</strong> <a href="lesson-4-config.html">ConfigMaps (Configuration Management)</a></p>
+
+    <p><strong>🎉 Great job!</strong> Your pods now have resource guardrails to prevent cluster issues.</p>
+
+</body>
+</html>

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 4 - Scaling & Rolling Updates</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+            color: #24292e;
+        }
+        h1 {
+            border-bottom: 3px solid #0366d6;
+            padding-bottom: 10px;
+        }
+        h2 {
+            margin-top: 30px;
+            color: #0366d6;
+        }
+        h3 {
+            color: #0366d6;
+        }
+        code {
+            background: #f6f8fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background: #f6f8fa;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border: 1px solid #e1e4e8;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        .knowledge {
+            background: #d1ecf1;
+            border-left: 4px solid #0c5460;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .experiment {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .checkpoint {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .explanation {
+            background: #e7f3ff;
+            border-left: 4px solid #0366d6;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .diagram {
+            background: #f6f8fa;
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px solid #0366d6;
+            font-family: monospace;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .warning {
+            background: #ffe5e5;
+            border-left: 4px solid #ff6b6b;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #e1e4e8;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background: #f6f8fa;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <h1>Lesson 4: Scaling & Rolling Updates</h1>
+
+    <p><strong>Goal:</strong> Experience Kubernetes orchestration - scale your app dynamically and perform zero-downtime updates.</p>
+
+    <div class="knowledge">
+        <h3>📚 What You'll Learn</h3>
+        <p>This lesson demonstrates Kubernetes' core value propositions:</p>
+        <ul>
+            <li><strong>Horizontal Scaling:</strong> Add/remove instances on demand</li>
+            <li><strong>Rolling Updates:</strong> Deploy new versions without downtime</li>
+            <li><strong>Rollback:</strong> Revert to previous versions instantly</li>
+            <li><strong>Declarative Management:</strong> Describe desired state, K8s makes it happen</li>
+        </ul>
+    </div>
+
+    <h2>Part 1: Horizontal Scaling</h2>
+
+    <div class="knowledge">
+        <h3>What is Horizontal Scaling?</h3>
+        <p><strong>Horizontal scaling (scale out/in):</strong> Add or remove instances</p>
+        <p><strong>Vertical scaling (scale up/down):</strong> Increase resources (CPU/RAM) per instance</p>
+
+        <p>Kubernetes excels at horizontal scaling because:</p>
+        <ul>
+            <li>No downtime - new Pods start while old ones run</li>
+            <li>Elastic - scale based on load (manual or automatic)</li>
+            <li>Service automatically load balances across all replicas</li>
+        </ul>
+
+        <div class="diagram">
+Scale Out (2 → 5 replicas):
+Before:          After:
+Pod #1           Pod #1
+Pod #2           Pod #2
+                 Pod #3  ← new
+                 Pod #4  ← new
+                 Pod #5  ← new
+
+Service load balances across all 5!
+        </div>
+    </div>
+
+    <div class="experiment">
+        <h3>🔬 Experiment 1: Scale Up</h3>
+
+        <h4>Setup - Monitor Everything:</h4>
+        <pre><code># Terminal 1: Watch Pods
+kubectl get pods -w
+
+# Terminal 2: Keep port-forward running
+kubectl port-forward service/k8s-demo-service 8080:8080</code></pre>
+
+        <h4>Scale from 2 to 5 Replicas:</h4>
+        <pre><code># Terminal 3
+kubectl scale deployment k8s-demo --replicas=5</code></pre>
+
+        <p><strong>Watch Terminal 1:</strong></p>
+        <ol>
+            <li>3 new Pods appear with status: <code>ContainerCreating</code></li>
+            <li>They become <code>Running</code> one by one</li>
+            <li>Total: 5 Pods running</li>
+        </ol>
+
+        <p><strong>Verify scaling:</strong></p>
+        <pre><code>kubectl get deployment k8s-demo
+# READY should show 5/5
+
+kubectl get pods | grep k8s-demo | wc -l
+# Should return 5</code></pre>
+
+        <h4>Test Load Distribution:</h4>
+        <pre><code># Terminal 4: Call endpoint repeatedly, watch Pod names in logs
+for i in {1..10}; do
+  curl -s http://localhost:8080/hello | jq -r '.timestamp'
+  sleep 0.5
+done</code></pre>
+
+        <p>Traffic is distributed across all 5 Pods!</p>
+    </div>
+
+    <div class="experiment">
+        <h3>🔬 Experiment 2: Scale Down</h3>
+
+        <pre><code>kubectl scale deployment k8s-demo --replicas=1</code></pre>
+
+        <p><strong>Watch what happens:</strong></p>
+        <ol>
+            <li>4 Pods immediately show <code>Terminating</code></li>
+            <li>Kubernetes gracefully shuts them down</li>
+            <li>1 Pod remains <code>Running</code></li>
+            <li>Your app still works (test with curl!)</li>
+        </ol>
+
+        <p><strong>Scale back to 2 for the next part:</strong></p>
+        <pre><code>kubectl scale deployment k8s-demo --replicas=2</code></pre>
+    </div>
+
+    <div class="explanation">
+        <h3>💡 What Just Happened?</h3>
+
+        <p><strong>Declarative approach:</strong></p>
+        <pre><code># You declared: "I want 5 replicas"
+kubectl scale deployment k8s-demo --replicas=5
+
+# Kubernetes figured out:
+# - Current state: 2 Pods running
+# - Desired state: 5 Pods running
+# - Action needed: Create 3 more Pods
+# - Execution: Created 3 Pods automatically</code></pre>
+
+        <p><strong>Compare to doing this manually with Docker:</strong></p>
+        <pre><code># You'd have to:
+docker run ... k8s-demo:v1  # Start Pod 3
+docker run ... k8s-demo:v1  # Start Pod 4
+docker run ... k8s-demo:v1  # Start Pod 5
+# Then manually configure load balancer
+# Then monitor if any crash and restart them
+# 😰 So much manual work!</code></pre>
+
+        <p>Kubernetes does all of this automatically when you change one number: <code>replicas</code>.</p>
+    </div>
+
+    <h2>Part 2: Rolling Updates</h2>
+
+    <div class="knowledge">
+        <h3>What is a Rolling Update?</h3>
+        <p>Deploy a new version by <strong>gradually replacing old Pods with new ones</strong>.</p>
+
+        <div class="diagram">
+Rolling Update Strategy (v1 → v2):
+
+Step 1: Start          Step 2: +1 new         Step 3: -1 old
+v1 Pod #1              v1 Pod #1              v2 Pod #3 ✨
+v1 Pod #2              v1 Pod #2              v1 Pod #2
+                       v2 Pod #3 ✨ (new)
+
+Step 4: +1 new         Step 5: -1 old         Step 6: Done
+v2 Pod #3              v2 Pod #3              v2 Pod #3
+v1 Pod #2              v2 Pod #4 ✨           v2 Pod #4
+v2 Pod #4 ✨           v1 Pod #2
+
+At every step, Service has healthy Pods → Zero downtime!
+        </div>
+
+        <p><strong>Default behavior:</strong></p>
+        <ul>
+            <li><strong>MaxSurge:</strong> 25% (can create extra Pods during update)</li>
+            <li><strong>MaxUnavailable:</strong> 25% (how many can be down during update)</li>
+            <li>With 2 replicas: Creates 1 new, then terminates 1 old, repeats</li>
+        </ul>
+    </div>
+
+    <div class="experiment">
+        <h3>🔬 Experiment 3: Rolling Update to v2</h3>
+
+        <h4>Step 1: Update Your Code</h4>
+        <p>Open <code>src/main/java/com/backend/k8sdemo/web/HelloController.java</code></p>
+        <p>Change the message:</p>
+        <pre><code>// From:
+Map.of("message", "Hello from K8s Demo!", ...)
+
+// To:
+Map.of("message", "Hello from K8s Demo v2!",
+       "version", "2.0",
+       "timestamp", ...)</code></pre>
+
+        <h4>Step 2: Build New Docker Image</h4>
+        <pre><code># Build with v2 tag
+docker build -t k8s-demo:v2 .
+
+# Load into minikube
+minikube image load k8s-demo:v2
+
+# Verify it's loaded
+minikube image ls | grep k8s-demo</code></pre>
+
+        <h4>Step 3: Monitor the Update</h4>
+        <pre><code># Terminal 1: Watch Pods with more detail
+kubectl get pods -w -o wide
+
+# Terminal 2: Watch rollout status
+kubectl rollout status deployment/k8s-demo
+
+# Terminal 3: Keep port-forward running
+kubectl port-forward service/k8s-demo-service 8080:8080</code></pre>
+
+        <h4>Step 4: Update Deployment</h4>
+        <p>Update <code>k8s/deployment.yaml</code> - change image tag:</p>
+        <pre><code>spec:
+  template:
+    spec:
+      containers:
+      - name: k8s-demo
+        image: k8s-demo:v2  # Changed from v1 to v2</code></pre>
+
+        <p>Apply the change:</p>
+        <pre><code>kubectl apply -f k8s/deployment.yaml</code></pre>
+
+        <p><strong>Watch Terminal 1:</strong></p>
+        <ol>
+            <li>New Pod appears: <code>k8s-demo-xxxxx</code> with <code>ContainerCreating</code></li>
+            <li>New Pod becomes <code>Running</code></li>
+            <li>Old Pod goes <code>Terminating</code></li>
+            <li>Process repeats for second Pod</li>
+            <li>Update complete!</li>
+        </ol>
+
+        <p><strong>Watch Terminal 2:</strong></p>
+        <pre><code>Waiting for deployment "k8s-demo" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "k8s-demo" rollout to finish: 1 old replicas are pending termination...
+deployment "k8s-demo" successfully rolled out</code></pre>
+    </div>
+
+    <div class="checkpoint">
+        <h3>✓ Test During Update</h3>
+
+        <p>While the update is happening, keep calling your endpoint:</p>
+        <pre><code># Terminal 4
+while true; do
+  curl -s http://localhost:8080/hello | jq '.message, .version'
+  sleep 1
+done</code></pre>
+
+        <p><strong>You'll see:</strong></p>
+        <pre><code>"Hello from K8s Demo!"
+null  # v1 doesn't have version field
+
+"Hello from K8s Demo v2!"  # New version!
+"2.0"
+
+"Hello from K8s Demo v2!"
+"2.0"</code></pre>
+
+        <p><strong>Zero downtime!</strong> Traffic gradually shifts from v1 → v2 as Pods update.</p>
+    </div>
+
+    <div class="explanation">
+        <h3>💡 What Happened Under the Hood</h3>
+
+        <p>When you ran <code>kubectl apply -f k8s/deployment.yaml</code>:</p>
+
+        <ol>
+            <li><strong>Kubernetes detected change:</strong> Image tag changed from v1 to v2</li>
+            <li><strong>Created ReplicaSet:</strong> New ReplicaSet for v2 Pods</li>
+            <li><strong>Scaled up new:</strong> Created 1 Pod with v2 image</li>
+            <li><strong>Waited for ready:</strong> Ensured new Pod passes health checks</li>
+            <li><strong>Scaled down old:</strong> Terminated 1 v1 Pod</li>
+            <li><strong>Repeated:</strong> Until all Pods are v2</li>
+        </ol>
+
+        <p><strong>Check the ReplicaSets:</strong></p>
+        <pre><code>kubectl get replicasets
+
+# You'll see two:
+# k8s-demo-xxxxxxx   0   0   0   10m   # Old (v1) - scaled to 0
+# k8s-demo-yyyyyyy   2   2   2   2m    # New (v2) - scaled to 2</code></pre>
+
+        <p>Kubernetes keeps the old ReplicaSet for rollback!</p>
+    </div>
+
+    <h2>Part 3: Rollback</h2>
+
+    <div class="knowledge">
+        <h3>What if v2 is Broken?</h3>
+        <p>Kubernetes keeps rollout history. You can rollback to any previous version instantly.</p>
+    </div>
+
+    <div class="experiment">
+        <h3>🔬 Experiment 4: Rollback to v1</h3>
+
+        <h4>View Rollout History:</h4>
+        <pre><code>kubectl rollout history deployment/k8s-demo
+
+# Output:
+# REVISION  CHANGE-CAUSE
+# 1         &lt;none&gt;
+# 2         &lt;none&gt;</code></pre>
+
+        <p>Revision 1 = v1, Revision 2 = v2</p>
+
+        <h4>Rollback to Previous Version:</h4>
+        <pre><code>kubectl rollout undo deployment/k8s-demo</code></pre>
+
+        <p><strong>Watch the Pods:</strong></p>
+        <ol>
+            <li>New Pods created with v1 image</li>
+            <li>v2 Pods terminated</li>
+            <li>Same rolling update process, but in reverse!</li>
+        </ol>
+
+        <h4>Test It:</h4>
+        <pre><code>curl http://localhost:8080/hello | jq</code></pre>
+
+        <p>You're back to v1! No "version" field.</p>
+
+        <h4>Rollback to Specific Revision:</h4>
+        <pre><code># Go back to v2
+kubectl rollout undo deployment/k8s-demo --to-revision=2</code></pre>
+    </div>
+
+    <div class="checkpoint">
+        <h3>✓ Understanding Rollout Commands</h3>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Command</th>
+                    <th>What It Does</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>kubectl rollout status</code></td>
+                    <td>Watch current rollout progress</td>
+                </tr>
+                <tr>
+                    <td><code>kubectl rollout history</code></td>
+                    <td>List all revisions</td>
+                </tr>
+                <tr>
+                    <td><code>kubectl rollout undo</code></td>
+                    <td>Rollback to previous revision</td>
+                </tr>
+                <tr>
+                    <td><code>kubectl rollout undo --to-revision=N</code></td>
+                    <td>Rollback to specific revision</td>
+                </tr>
+                <tr>
+                    <td><code>kubectl rollout pause</code></td>
+                    <td>Pause an in-progress rollout</td>
+                </tr>
+                <tr>
+                    <td><code>kubectl rollout resume</code></td>
+                    <td>Resume a paused rollout</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2>Part 4: Update Strategies</h2>
+
+    <div class="knowledge">
+        <h3>RollingUpdate vs Recreate</h3>
+
+        <p>Kubernetes supports two update strategies:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th>How It Works</th>
+                    <th>Downtime?</th>
+                    <th>Use Case</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>RollingUpdate</strong><br>(default)</td>
+                    <td>Gradually replace old with new</td>
+                    <td>❌ No</td>
+                    <td>Most apps, production</td>
+                </tr>
+                <tr>
+                    <td><strong>Recreate</strong></td>
+                    <td>Kill all old, then start all new</td>
+                    <td>✅ Yes</td>
+                    <td>Can't run v1 & v2 together<br>(e.g., database schema changes)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4>RollingUpdate Configuration:</h4>
+        <pre><code>spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Max extra Pods during update
+      maxUnavailable: 0  # Min Pods that must stay running</code></pre>
+
+        <p><strong>maxSurge: 1, maxUnavailable: 0</strong> means:</p>
+        <ul>
+            <li>Can create 1 extra Pod temporarily (2 → 3 during update)</li>
+            <li>All original Pods must stay running until new ones are ready</li>
+            <li>Zero unavailability guaranteed!</li>
+        </ul>
+    </div>
+
+    <div class="experiment">
+        <h3>🔬 Experiment 5: Zero-Downtime Update</h3>
+
+        <h4>Update Deployment with Strict Settings:</h4>
+        <p>Add to <code>k8s/deployment.yaml</code>:</p>
+        <pre><code>spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  # ... rest of spec</code></pre>
+
+        <p>Apply it:</p>
+        <pre><code>kubectl apply -f k8s/deployment.yaml</code></pre>
+
+        <h4>Create v3 with a Slow Startup:</h4>
+        <p>Update <code>HelloController.java</code>:</p>
+        <pre><code>@RestController
+public class HelloController {
+
+    public HelloController() throws InterruptedException {
+        // Simulate slow startup (10 seconds)
+        Thread.sleep(10000);
+    }
+
+    @GetMapping("/hello")
+    public ResponseEntity&lt;Map&lt;String, String&gt;&gt; sayHiToTheWorld() {
+        Map&lt;String, String&gt; response = Map.of(
+            "message", "Hello from K8s Demo v3!",
+            "version", "3.0",
+            "timestamp", Instant.now().toString()
+        );
+        return ResponseEntity.ok(response);
+    }
+}</code></pre>
+
+        <p>Build and load:</p>
+        <pre><code>docker build -t k8s-demo:v3 .
+minikube image load k8s-demo:v3</code></pre>
+
+        <p>Update deployment.yaml to v3, apply it, and monitor:</p>
+        <pre><code># Terminal 1: Watch Pods
+kubectl get pods -w
+
+# Terminal 2: Continuous requests
+while true; do
+  curl -s http://localhost:8080/hello 2>&1 | grep -o '"version":"[^"]*"' || echo "Failed"
+  sleep 0.5
+done</code></pre>
+
+        <p><strong>What you'll see:</strong></p>
+        <ol>
+            <li>New v3 Pod created</li>
+            <li>Stays in <code>ContainerCreating</code> for ~10s (slow startup)</li>
+            <li>Old v2 Pods keep serving traffic!</li>
+            <li>Once v3 Pod is <code>Running</code>, one v2 Pod terminates</li>
+            <li>Process repeats for second Pod</li>
+            <li><strong>Zero failed requests!</strong> (maybe 1-2 if timing is tight)</li>
+        </ol>
+
+        <p>This is the power of <code>maxUnavailable: 0</code> - old Pods stay up until new ones are ready.</p>
+    </div>
+
+    <div class="checkpoint">
+        <h3>✓ Commit Your Changes</h3>
+        <pre><code># Remove the Thread.sleep from HelloController first!
+# Then commit
+git add src/ k8s/ Dockerfile
+git commit -m "Add v2 and v3 updates with rolling update strategy"</code></pre>
+    </div>
+
+    <div class="knowledge">
+        <h3>🤔 Key Takeaways</h3>
+
+        <h4>Scaling:</h4>
+        <ul>
+            <li>Change <code>replicas</code> field → Kubernetes creates/destroys Pods</li>
+            <li>Service automatically load balances across all replicas</li>
+            <li>Can scale to 100+ instances (limited by cluster resources)</li>
+        </ul>
+
+        <h4>Rolling Updates:</h4>
+        <ul>
+            <li>Change image tag → Kubernetes gradually replaces Pods</li>
+            <li>Zero downtime with proper <code>maxSurge</code>/<code>maxUnavailable</code> settings</li>
+            <li>Keeps old ReplicaSets for rollback</li>
+        </ul>
+
+        <h4>Rollback:</h4>
+        <ul>
+            <li>Instant rollback to any previous revision</li>
+            <li>Same rolling process, but in reverse</li>
+            <li>Production safety net - bad deploy? Roll it back!</li>
+        </ul>
+
+        <h4>Real-World Impact:</h4>
+        <ul>
+            <li><strong>Black Friday?</strong> Scale from 5 to 50 replicas in seconds</li>
+            <li><strong>Bug in production?</strong> Rollback in 30 seconds</li>
+            <li><strong>Deploy during business hours?</strong> Zero downtime, users don't notice</li>
+        </ul>
+    </div>
+
+    <div class="warning">
+        <h3>⚠️ Production Considerations</h3>
+
+        <p>In real environments, you'd also configure:</p>
+        <ul>
+            <li><strong>Health checks:</strong> Readiness/Liveness probes (K8s doesn't route to unhealthy Pods)</li>
+            <li><strong>Resource limits:</strong> CPU/memory requests and limits</li>
+            <li><strong>Autoscaling:</strong> Horizontal Pod Autoscaler (HPA) scales based on CPU/metrics</li>
+            <li><strong>Pod Disruption Budgets:</strong> Limit how many Pods can be down during maintenance</li>
+            <li><strong>Graceful shutdown:</strong> Handle SIGTERM, drain connections before terminating</li>
+        </ul>
+
+        <p>These are beyond the scope of this intro, but good to know they exist!</p>
+    </div>
+
+    <h2>What's Next?</h2>
+
+    <p>You've completed the core Kubernetes learning path! 🎉</p>
+
+    <p><strong>You now understand:</strong></p>
+    <ul>
+        <li>✅ Containerization (Docker)</li>
+        <li>✅ Orchestration (Kubernetes)</li>
+        <li>✅ Deployments, Services, Pods</li>
+        <li>✅ Scaling, Rolling Updates, Rollbacks</li>
+    </ul>
+
+    <p><strong>Next steps to deepen your knowledge:</strong></p>
+    <ul>
+        <li>Add health checks (readiness/liveness probes)</li>
+        <li>Configure resource limits</li>
+        <li>Explore ConfigMaps and Secrets</li>
+        <li>Try Horizontal Pod Autoscaler (HPA)</li>
+        <li>Deploy to a real cluster (EKS, GKE, AKS)</li>
+        <li>Add Ingress for HTTP routing</li>
+        <li>Set up monitoring (Prometheus + Grafana)</li>
+    </ul>
+
+    <p><strong>Congratulations on completing this learning journey!</strong> 🚀</p>
+
+</body>
+</html>

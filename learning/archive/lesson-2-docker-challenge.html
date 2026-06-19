@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 2 - Docker Challenge</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+            color: #24292e;
+        }
+        h1 {
+            border-bottom: 3px solid #0366d6;
+            padding-bottom: 10px;
+        }
+        h2 {
+            margin-top: 30px;
+            color: #0366d6;
+        }
+        code {
+            background: #f6f8fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background: #f6f8fa;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border: 1px solid #e1e4e8;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        .challenge {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .hint {
+            background: #e7f3ff;
+            border-left: 4px solid #0366d6;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .checkpoint {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .stuck {
+            background: #ffe5e5;
+            border-left: 4px solid #ff6b6b;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        a {
+            color: #0366d6;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Lesson 2: Containerize with Docker</h1>
+
+    <p><strong>Goal:</strong> Research and containerize your Spring Boot app yourself. No copy-paste allowed! 🚫</p>
+
+    <div class="challenge">
+        <h3>⚡ Your Challenge</h3>
+        <p>Package your Spring Boot application into a Docker container and run it.</p>
+
+        <p><strong>Success criteria:</strong></p>
+        <ol>
+            <li>Create a <code>Dockerfile</code> that builds your app</li>
+            <li>Build a Docker image tagged <code>k8s-demo:v1</code></li>
+            <li>Run a container from that image</li>
+            <li>Successfully call <code>curl http://localhost:8080/hello</code></li>
+        </ol>
+
+        <p><strong>Rules:</strong></p>
+        <ul>
+            <li>❌ No copy-paste from tutorials</li>
+            <li>✅ Read documentation and understand each line</li>
+            <li>✅ Use Google, Stack Overflow, official docs</li>
+            <li>✅ Experiment and iterate</li>
+        </ul>
+    </div>
+
+    <h2>Research Starting Points</h2>
+
+    <div class="hint">
+        <h3>🔍 What to Research</h3>
+        <p>Search for these topics:</p>
+        <ul>
+            <li>"How to dockerize Spring Boot application"</li>
+            <li>"Spring Boot Docker multi-stage build"</li>
+            <li>"Dockerfile for Java application"</li>
+            <li>"Docker best practices for Java"</li>
+        </ul>
+
+        <p><strong>Official resources to explore:</strong></p>
+        <ul>
+            <li><a href="https://spring.io/guides/gs/spring-boot-docker" target="_blank">Spring Boot with Docker (Spring.io)</a></li>
+            <li><a href="https://docs.docker.com/language/java/" target="_blank">Docker Java Language Guide</a></li>
+            <li><a href="https://docs.docker.com/build/building/multi-stage/" target="_blank">Multi-stage Builds (Docker Docs)</a></li>
+        </ul>
+    </div>
+
+    <h2>Key Concepts to Understand</h2>
+
+    <div class="hint">
+        <h3>📚 Before You Start</h3>
+        <p>Make sure you understand these concepts as you research:</p>
+
+        <h4>1. What is a Dockerfile?</h4>
+        <p>A text file with instructions to build a Docker image. Think: recipe for creating a container.</p>
+
+        <h4>2. Why Multi-Stage Builds?</h4>
+        <p>For Java apps, you need:</p>
+        <ul>
+            <li><strong>Build stage:</strong> Gradle/Maven + JDK to compile your code</li>
+            <li><strong>Runtime stage:</strong> Only JRE + JAR file (smaller, more secure)</li>
+        </ul>
+
+        <h4>3. What Goes in a Dockerfile?</h4>
+        <p>Think about:</p>
+        <ul>
+            <li>What base image? (Gradle? JDK? JRE?)</li>
+            <li>How to copy your code into the container?</li>
+            <li>How to build the JAR?</li>
+            <li>How to run the JAR?</li>
+            <li>Which port to expose?</li>
+        </ul>
+    </div>
+
+    <h2>Checkpoints</h2>
+
+    <div class="checkpoint">
+        <h3>✓ Checkpoint 1: Dockerfile Created</h3>
+        <p>Create a <code>Dockerfile</code> in your project root.</p>
+
+        <p><strong>Questions to answer while writing it:</strong></p>
+        <ul>
+            <li>What base image will you use for building? For running?</li>
+            <li>How will you copy dependency files vs source code? (Why does order matter?)</li>
+            <li>What command builds a Spring Boot JAR?</li>
+            <li>Where does Gradle put the built JAR?</li>
+            <li>What command runs a JAR file?</li>
+        </ul>
+    </div>
+
+    <div class="checkpoint">
+        <h3>✓ Checkpoint 2: .dockerignore Created</h3>
+        <p>Create a <code>.dockerignore</code> file. Research why this is important!</p>
+
+        <p><strong>What to exclude?</strong></p>
+        <ul>
+            <li>Build artifacts (.gradle/, build/)</li>
+            <li>Version control (.git/)</li>
+            <li>IDE files (.idea/)</li>
+            <li>Documentation (*.md, learning/)</li>
+        </ul>
+    </div>
+
+    <div class="checkpoint">
+        <h3>✓ Checkpoint 3: Build the Image</h3>
+        <pre><code>docker build -t k8s-demo:v1 .</code></pre>
+
+        <p><strong>If build fails:</strong></p>
+        <ul>
+            <li>Read the error message carefully</li>
+            <li>What layer failed? What was it trying to do?</li>
+            <li>Google the specific error</li>
+            <li>Check file paths, permissions, syntax</li>
+        </ul>
+
+        <p><strong>Common issues to research:</strong></p>
+        <ul>
+            <li>"gradle-wrapper.jar not found docker"</li>
+            <li>"docker copy directory syntax"</li>
+            <li>"spring boot port configuration docker"</li>
+        </ul>
+    </div>
+
+    <div class="checkpoint">
+        <h3>✓ Checkpoint 4: Run the Container</h3>
+        <pre><code>docker run -d -p 8080:8080 --name k8s-demo-container k8s-demo:v1</code></pre>
+
+        <p><strong>Understand each flag:</strong></p>
+        <ul>
+            <li><code>-d</code> = ?</li>
+            <li><code>-p 8080:8080</code> = ?</li>
+            <li><code>--name</code> = ?</li>
+        </ul>
+
+        <p><strong>Debug if it doesn't work:</strong></p>
+        <pre><code># Check if container is running
+docker ps
+
+# View logs
+docker logs k8s-demo-container
+
+# Check what port your app listens on
+# (Hint: might be in application.yaml!)</code></pre>
+    </div>
+
+    <div class="checkpoint">
+        <h3>✓ Checkpoint 5: Test It!</h3>
+        <pre><code>curl http://localhost:8080/hello</code></pre>
+
+        <p><strong>Success:</strong> You see your JSON response!</p>
+        <p><strong>Failure:</strong> Read container logs, check port configuration, verify the app started</p>
+    </div>
+
+    <div class="checkpoint">
+        <h3>✓ Checkpoint 6: Commit Your Work</h3>
+        <pre><code>git add Dockerfile .dockerignore
+git commit -m "Add Dockerfile for containerization"</code></pre>
+    </div>
+
+    <div class="stuck">
+        <h3>😵 Stuck? Need Help?</h3>
+        <p>If you've spent 30+ minutes and are truly stuck (not just slightly confused), open the explanation:</p>
+        <p><a href="lesson-2-docker-explained.html"><strong>→ Lesson 2 - Docker Explained (Spoilers!)</strong></a></p>
+
+        <p><strong>But first, try:</strong></p>
+        <ul>
+            <li>Reading the Spring Boot Docker guide thoroughly</li>
+            <li>Comparing your Dockerfile to examples online (don't copy - understand differences)</li>
+            <li>Running <code>docker build</code> and reading error messages carefully</li>
+            <li>Checking Docker logs for startup errors</li>
+        </ul>
+
+        <p><strong>Also available:</strong></p>
+        <ul>
+            <li><a href="../reference/docker-copy-deep-dive.html">Deep Dive: How COPY Works</a> (if COPY is confusing)</li>
+            <li><a href="../reference/docker-commands.html">Docker Commands Reference</a></li>
+        </ul>
+    </div>
+
+    <h2>What's Next?</h2>
+    <p>Once your container runs successfully, move to <strong>Lesson 3</strong> where you'll deploy this to Kubernetes!</p>
+
+    <div class="hint">
+        <h3>💡 Reflection</h3>
+        <p>After completing this challenge, think about:</p>
+        <ul>
+            <li>What was the hardest part?</li>
+            <li>What surprised you about Docker?</li>
+            <li>What did you learn by troubleshooting errors?</li>
+            <li>How is this different from running <code>./gradlew bootRun</code> locally?</li>
+        </ul>
+    </div>
+
+</body>
+</html>

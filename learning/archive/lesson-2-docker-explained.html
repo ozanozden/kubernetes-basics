@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 2: Containerize with Docker</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+            color: #24292e;
+        }
+        h1 {
+            border-bottom: 3px solid #0366d6;
+            padding-bottom: 10px;
+        }
+        h2 {
+            margin-top: 30px;
+            color: #0366d6;
+        }
+        code {
+            background: #f6f8fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background: #f6f8fa;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border: 1px solid #e1e4e8;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        .task {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .knowledge {
+            background: #d1ecf1;
+            border-left: 4px solid #0c5460;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .checkpoint {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        a {
+            color: #0366d6;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .feedback {
+            background: #e7f3ff;
+            border-left: 4px solid #0366d6;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ff6b6b;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Lesson 2: Containerize with Docker</h1>
+
+    <p><strong>Goal:</strong> Package your Spring Boot app into a Docker container and run it locally.</p>
+
+    <div class="knowledge">
+        <h3>📚 Knowledge: What is Docker?</h3>
+        <p>Docker packages your application and all its dependencies into a <strong>container</strong> - a lightweight, standalone executable package. Think of it as a shipping container for your code.</p>
+
+        <h4>Key Concepts:</h4>
+        <ul>
+            <li><strong>Image:</strong> A blueprint/template for containers (like a class in OOP)</li>
+            <li><strong>Container:</strong> A running instance of an image (like an object)</li>
+            <li><strong>Dockerfile:</strong> Instructions for building an image</li>
+            <li><strong>Layer:</strong> Each Dockerfile instruction creates a layer. Layers are cached for faster builds.</li>
+        </ul>
+
+        <h4>Why Containerize?</h4>
+        <ul>
+            <li><strong>"Works on my machine"</strong> → Works everywhere (same environment)</li>
+            <li><strong>Lightweight:</strong> Containers share the OS kernel (unlike VMs)</li>
+            <li><strong>Portable:</strong> Run anywhere Docker runs (your laptop, AWS, GCP)</li>
+            <li><strong>Required for Kubernetes:</strong> K8s orchestrates containers</li>
+        </ul>
+
+        <p><strong>Read more:</strong> <a href="https://docs.docker.com/get-started/docker-overview/" target="_blank">Docker Overview (Docker Docs)</a></p>
+    </div>
+
+    <div class="knowledge">
+        <h3>🏗️ Multi-stage Builds</h3>
+        <p>You'll use a <strong>multi-stage Dockerfile</strong> - a best practice for Java apps. This approach:</p>
+        <ol>
+            <li><strong>Stage 1 (build):</strong> Uses Gradle to build your JAR file</li>
+            <li><strong>Stage 2 (runtime):</strong> Copies only the JAR to a minimal JRE image</li>
+        </ol>
+        <p><strong>Why?</strong> The final image doesn't include Gradle, source code, or build tools - making it smaller and more secure.</p>
+        <p><strong>Read more:</strong> <a href="https://spring.io/guides/gs/spring-boot-docker" target="_blank">Spring Boot with Docker (Spring.io)</a></p>
+    </div>
+
+    <h2>Your Tasks</h2>
+
+    <div class="task">
+        <h3>Task 1: Create a Dockerfile</h3>
+        <p>Create a file named <code>Dockerfile</code> (no extension) in your project root:</p>
+        <p><code>/Users/oz.oezden/IdeaProjects/private-projects/k8s-demo/Dockerfile</code></p>
+
+        <p>Your Dockerfile should have two stages:</p>
+
+        <h4>Stage 1: Build</h4>
+        <ul>
+            <li>Use <code>gradle:8-jdk21</code> as the base image</li>
+            <li>Set working directory to <code>/app</code></li>
+            <li>Copy build files: <code>build.gradle</code>, <code>settings.gradle</code>, <code>gradlew</code>, <code>gradlew.bat</code>, <code>gradle/</code></li>
+            <li>Copy source code: <code>src/</code></li>
+            <li>Run the build: <code>./gradlew bootJar --no-daemon</code></li>
+        </ul>
+
+        <h4>Stage 2: Runtime</h4>
+        <ul>
+            <li>Use <code>eclipse-temurin:21-jre</code> as the base image (smaller, only JRE)</li>
+            <li>Set working directory to <code>/app</code></li>
+            <li>Copy the JAR from stage 1: <code>/app/build/libs/*.jar</code> to <code>/app/app.jar</code></li>
+            <li>Expose port 8080</li>
+            <li>Set the entrypoint: <code>java -jar /app/app.jar</code></li>
+        </ul>
+
+        <p><strong>Hints:</strong></p>
+        <ul>
+            <li>Use <code>FROM ... AS build</code> to name the first stage</li>
+            <li>Use <code>COPY --from=build</code> in the second stage to copy from the first</li>
+            <li>Check the <a href="https://spring.io/guides/gs/spring-boot-docker" target="_blank">Spring Docker guide</a> for syntax examples</li>
+        </ul>
+    </div>
+
+    <div class="task">
+        <h3>Task 2: Create a .dockerignore File</h3>
+        <p>Create <code>.dockerignore</code> in your project root to exclude unnecessary files from the build context:</p>
+        <pre><code>.git
+.gradle
+build
+.idea
+*.md
+learning/</code></pre>
+        <p><strong>Why?</strong> This makes builds faster by not sending these files to the Docker daemon.</p>
+    </div>
+
+    <div class="checkpoint">
+        <h3>✓ Checkpoint: Build Your Image</h3>
+        <p>Now test your Dockerfile:</p>
+        <ol>
+            <li>Build the image:
+                <pre><code>docker build -t k8s-demo:v1 .</code></pre>
+                <p>This will take a few minutes the first time.</p>
+            </li>
+            <li>Check the image was created:
+                <pre><code>docker images | grep k8s-demo</code></pre>
+                <p>You should see <code>k8s-demo</code> with tag <code>v1</code></p>
+            </li>
+        </ol>
+    </div>
+
+    <div class="checkpoint">
+        <h3>✓ Checkpoint: Run Your Container</h3>
+        <p>Run your containerized app:</p>
+        <ol>
+            <li>Start the container:
+                <pre><code>docker run -d -p 8080:8080 --name k8s-demo-container k8s-demo:v1</code></pre>
+                <p><strong>Flags explained:</strong></p>
+                <ul>
+                    <li><code>-d</code>: Run in background (detached)</li>
+                    <li><code>-p 8080:8080</code>: Map host port 8080 to container port 8080</li>
+                    <li><code>--name</code>: Name the container for easy reference</li>
+                </ul>
+            </li>
+            <li>Test the endpoint:
+                <pre><code>curl http://localhost:8080/hello</code></pre>
+                <p>You should see your JSON response!</p>
+            </li>
+            <li>View container logs:
+                <pre><code>docker logs k8s-demo-container</code></pre>
+            </li>
+            <li>Stop and remove the container:
+                <pre><code>docker stop k8s-demo-container
+docker rm k8s-demo-container</code></pre>
+            </li>
+        </ol>
+    </div>
+
+    <div class="task">
+        <h3>Task 3: Commit Your Work</h3>
+        <p>Once your container runs successfully:</p>
+        <pre><code>git add Dockerfile .dockerignore
+git commit -m "Add Dockerfile for containerization"</code></pre>
+    </div>
+
+    <div class="feedback">
+        <h3>💬 Tell Your Teacher</h3>
+        <p>Once you've completed the tasks and your container is running, let me know! I'll review your Dockerfile to check:</p>
+        <ul>
+            <li>Is the multi-stage build structured correctly?</li>
+            <li>Are the layers optimized for caching?</li>
+            <li>Does the image build and run successfully?</li>
+        </ul>
+    </div>
+
+    <h2>What's Next?</h2>
+    <p>After this lesson, you'll have a containerized Spring Boot app. In Lesson 3, you'll set up minikube and deploy your container to Kubernetes!</p>
+
+    <div class="knowledge">
+        <h3>🤔 Reflection Questions</h3>
+        <ul>
+            <li>What's the difference between an image and a container?</li>
+            <li>Why do we use two stages in the Dockerfile instead of one?</li>
+            <li>What would happen if you forgot to expose port 8080?</li>
+            <li>How does <code>-p 8080:8080</code> differ from <code>-p 9090:8080</code>?</li>
+        </ul>
+    </div>
+
+    <div class="warning">
+        <h3>⚠️ Common Mistakes</h3>
+        <ul>
+            <li><strong>COPY order matters:</strong> Copy <code>build.gradle</code> before <code>src/</code> to leverage layer caching</li>
+            <li><strong>Gradlew permissions:</strong> If build fails, make gradlew executable: <code>RUN chmod +x ./gradlew</code></li>
+            <li><strong>Port mapping:</strong> The container port (second number) must match <code>EXPOSE</code> in Dockerfile</li>
+        </ul>
+    </div>
+
+</body>
+</html>

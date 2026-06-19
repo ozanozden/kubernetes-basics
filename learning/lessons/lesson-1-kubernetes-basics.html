@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 3: Deploy to Kubernetes (Explained)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+            color: #24292e;
+        }
+        h1 {
+            border-bottom: 3px solid #0366d6;
+            padding-bottom: 10px;
+        }
+        h2 {
+            margin-top: 30px;
+            color: #0366d6;
+        }
+        h3 {
+            color: #0366d6;
+        }
+        code {
+            background: #f6f8fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background: #f6f8fa;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border: 1px solid #e1e4e8;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        .task {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .knowledge {
+            background: #d1ecf1;
+            border-left: 4px solid #0c5460;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .checkpoint {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .explanation {
+            background: #e7f3ff;
+            border-left: 4px solid #0366d6;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .diagram {
+            background: #f6f8fa;
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px solid #0366d6;
+            font-family: monospace;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .yaml-section {
+            background: #fff;
+            border: 2px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .yaml-line {
+            margin: 10px 0;
+            padding-left: 20px;
+            border-left: 3px solid #e1e4e8;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #e1e4e8;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background: #f6f8fa;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <h1>Lesson 3: Deploy to Kubernetes (Explained)</h1>
+
+    <p><strong>Goal:</strong> Understand what each Kubernetes resource does and why we need it, then write the manifests yourself.</p>
+
+    <div class="knowledge">
+        <h3>📚 The Problem We're Solving</h3>
+        <p>With Docker alone, you manually:</p>
+        <ul>
+            <li>Run containers: <code>docker run</code></li>
+            <li>Restart crashed containers manually</li>
+            <li>Scale by running more containers manually</li>
+            <li>Handle load balancing yourself</li>
+            <li>Update by stopping old, starting new containers</li>
+        </ul>
+
+        <p><strong>Kubernetes automates all of this.</strong> But to tell K8s what to do, we write <strong>manifests</strong> - YAML files that describe our desired state.</p>
+    </div>
+
+    <h2>Understanding Kubernetes Resources</h2>
+
+    <div class="knowledge">
+        <h3>🎯 The Three Resources We'll Create</h3>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Resource</th>
+                    <th>What It Does</th>
+                    <th>Why We Need It</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Pod</strong></td>
+                    <td>Wraps your container(s)</td>
+                    <td>K8s doesn't run containers directly - it runs Pods</td>
+                </tr>
+                <tr>
+                    <td><strong>Deployment</strong></td>
+                    <td>Manages multiple identical Pods</td>
+                    <td>Handles scaling, updates, and keeping desired number of Pods running</td>
+                </tr>
+                <tr>
+                    <td><strong>Service</strong></td>
+                    <td>Stable network endpoint</td>
+                    <td>Load balances traffic across Pods (Pod IPs change, Service IP doesn't)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="diagram">
+┌─────────────────────────────────────────────┐
+│ Service (k8s-demo-service)                  │
+│ Type: NodePort                              │
+│ Stable endpoint for external access         │
+└────────────┬────────────────────────────────┘
+             │ Load balances between ↓
+       ┌─────┴─────┐
+       ↓           ↓
+┌──────────┐  ┌──────────┐
+│ Pod #1   │  │ Pod #2   │  ← Managed by Deployment
+│ (app)    │  │ (app)    │
+└──────────┘  └──────────┘
+
+If Pod crashes → Deployment creates new one
+If traffic increases → Deployment scales up
+        </div>
+    </div>
+
+    <h2>Part 1: Understanding Deployments</h2>
+
+    <div class="knowledge">
+        <h3>What is a Deployment?</h3>
+        <p>A Deployment is a <strong>controller</strong> that manages Pods. Think of it as a manager that:</p>
+        <ul>
+            <li>Creates the number of Pods you specify (<code>replicas</code>)</li>
+            <li>Monitors them - if one crashes, creates a replacement</li>
+            <li>Handles updates - gradually replaces old Pods with new ones</li>
+            <li>Handles rollbacks if updates fail</li>
+        </ul>
+
+        <p><strong>You don't create Pods manually.</strong> You create a Deployment, and it creates/manages Pods for you.</p>
+    </div>
+
+    <div class="yaml-section">
+        <h3>Building deployment.yaml Line by Line</h3>
+
+        <p>Let's build this file understanding each piece:</p>
+
+        <div class="yaml-line">
+            <code>apiVersion: apps/v1</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Tells K8s which API group this resource belongs to.
+                <br><strong>Why:</strong> K8s has multiple API versions for different resource types. Deployments are in the <code>apps/v1</code> API.
+                <br><strong>Think of it as:</strong> Import statement - "I'm using the apps API, version 1"
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>kind: Deployment</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Declares what type of resource this is.
+                <br><strong>Why:</strong> Tells K8s "this YAML describes a Deployment, not a Service or Pod"
+                <br><strong>Options:</strong> Deployment, Service, Pod, ConfigMap, Secret, etc.
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>metadata:</code><br>
+            <code>&nbsp;&nbsp;name: k8s-demo</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Names this Deployment.
+                <br><strong>Why:</strong> You'll reference this name in kubectl commands: <code>kubectl get deployment k8s-demo</code>
+                <br><strong>Must be unique:</strong> Within a namespace, no two Deployments can have the same name.
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>spec:</code><br>
+            <code>&nbsp;&nbsp;replicas: 2</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Tells K8s to run 2 copies (Pods) of your application.
+                <br><strong>Why:</strong>
+                <ul>
+                    <li>High availability: If one Pod crashes, the other keeps serving traffic</li>
+                    <li>Load distribution: Traffic is split between both Pods</li>
+                    <li>Zero downtime updates: Can update one while the other serves traffic</li>
+                </ul>
+                <strong>You can change this:</strong> Set to 1 for testing, 3+ for production
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>&nbsp;&nbsp;selector:</code><br>
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;matchLabels:</code><br>
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;app: k8s-demo</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Tells the Deployment how to find "its" Pods.
+                <br><strong>Why:</strong> In K8s, multiple Deployments/Pods exist. This selector says "I manage Pods with label <code>app=k8s-demo</code>"
+                <br><strong>Must match:</strong> The labels in <code>template.metadata.labels</code> below
+                <br><strong>Think of it as:</strong> SQL WHERE clause - "SELECT pods WHERE app='k8s-demo'"
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>&nbsp;&nbsp;template:</code><br>
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;metadata:</code><br>
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;labels:</code><br>
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;app: k8s-demo</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Template for Pods this Deployment creates. Labels each Pod with <code>app=k8s-demo</code>
+                <br><strong>Why:</strong>
+                <ul>
+                    <li>Matches the selector above (Deployment finds these Pods)</li>
+                    <li>Service uses this label to find Pods to send traffic to</li>
+                    <li>You can query: <code>kubectl get pods -l app=k8s-demo</code></li>
+                </ul>
+                <strong>Labels are key-value pairs</strong> - you can have multiple: <code>app: k8s-demo, version: v1, tier: backend</code>
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;spec:</code><br>
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;containers:</code><br>
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: k8s-demo</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Pod spec - describes what containers run in each Pod. This names the container.
+                <br><strong>Why:</strong> A Pod can run multiple containers (sidecar pattern). Each needs a unique name.
+                <br><strong>We only have one container</strong> - our Spring Boot app
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image: k8s-demo:v1</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Specifies which Docker image to run.
+                <br><strong>Why:</strong> This is your containerized app! K8s pulls this image and runs it.
+                <br><strong>Format:</strong> <code>repository:tag</code> or <code>registry/repository:tag</code>
+                <br><strong>Our case:</strong> Local image (no registry), tag v1
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;imagePullPolicy: Never</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Tells K8s NOT to pull from a remote registry.
+                <br><strong>Why:</strong> Our image is local (loaded into minikube). Default behavior would try to pull from Docker Hub and fail.
+                <br><strong>Options:</strong>
+                <ul>
+                    <li><code>Always</code> - Always pull from registry (production)</li>
+                    <li><code>IfNotPresent</code> - Pull only if not cached locally</li>
+                    <li><code>Never</code> - Use local image only (our case)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ports:</code><br>
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- containerPort: 8080</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Documents which port the container listens on.
+                <br><strong>Why:</strong>
+                <ul>
+                    <li>Documentation - tells readers/tools "this app serves on 8080"</li>
+                    <li>Used by Services to route traffic to the right port</li>
+                    <li>Some networking plugins require this</li>
+                </ul>
+                <strong>Doesn't expose the port</strong> - that's the Service's job. This just declares it.
+            </div>
+        </div>
+
+        <h4>Complete deployment.yaml:</h4>
+        <pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: k8s-demo
+  template:
+    metadata:
+      labels:
+        app: k8s-demo
+    spec:
+      containers:
+      - name: k8s-demo
+        image: k8s-demo:v1
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8080</code></pre>
+    </div>
+
+    <h2>Part 2: Understanding Services</h2>
+
+    <div class="knowledge">
+        <h3>What is a Service?</h3>
+        <p>Pods have dynamic IPs - they change when Pods restart/scale. A Service provides a <strong>stable endpoint</strong>.</p>
+
+        <p><strong>The problem without Services:</strong></p>
+        <div class="diagram">
+Pod #1: 172.17.0.5  ← crashes
+Pod #2: 172.17.0.6
+Pod #3: 172.17.0.9  ← new Pod, different IP!
+
+How do clients know which IPs to call?
+        </div>
+
+        <p><strong>The solution with Services:</strong></p>
+        <div class="diagram">
+Service: stable IP (10.96.0.10) + DNS name
+  ↓ Load balances to:
+Pod #1: 172.17.0.5
+Pod #2: 172.17.0.6
+Pod #3: 172.17.0.9
+
+Clients always call the Service IP/DNS!
+        </div>
+    </div>
+
+    <div class="yaml-section">
+        <h3>Building service.yaml Line by Line</h3>
+
+        <div class="yaml-line">
+            <code>apiVersion: v1</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Services are in the core K8s API (v1), not apps/v1
+                <br><strong>Why different from Deployment:</strong> Services are older/more fundamental than Deployments
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>kind: Service</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Declares this is a Service resource
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>metadata:</code><br>
+            <code>&nbsp;&nbsp;name: k8s-demo-service</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Names this Service
+                <br><strong>Why:</strong> This becomes the DNS name! Other Pods can call <code>http://k8s-demo-service:8080</code>
+                <br><strong>Used in commands:</strong> <code>kubectl get service k8s-demo-service</code>
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>spec:</code><br>
+            <code>&nbsp;&nbsp;type: NodePort</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Exposes the Service on each Node's IP at a static port
+                <br><strong>Why we need it:</strong> For local testing with minikube. Lets us access from outside the cluster.
+                <br><strong>Service types:</strong>
+                <table>
+                    <tr>
+                        <th>Type</th>
+                        <th>Use Case</th>
+                    </tr>
+                    <tr>
+                        <td><code>ClusterIP</code></td>
+                        <td>Internal only (default) - not accessible from outside cluster</td>
+                    </tr>
+                    <tr>
+                        <td><code>NodePort</code></td>
+                        <td>Exposes on Node IP (minikube, testing)</td>
+                    </tr>
+                    <tr>
+                        <td><code>LoadBalancer</code></td>
+                        <td>Cloud provider creates external load balancer (AWS ELB, GCP LB)</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>&nbsp;&nbsp;selector:</code><br>
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;app: k8s-demo</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Tells Service which Pods to send traffic to
+                <br><strong>Why:</strong> Matches the labels on Pods created by your Deployment!
+                <br><strong>How it works:</strong> Service queries "find all Pods with label app=k8s-demo" and routes traffic to them
+                <br><strong>Must match:</strong> The labels in Deployment's <code>template.metadata.labels</code>
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>&nbsp;&nbsp;ports:</code><br>
+            <code>&nbsp;&nbsp;- protocol: TCP</code>
+            <div class="explanation">
+                <strong>What it does:</strong> Specifies the network protocol
+                <br><strong>Why TCP:</strong> HTTP runs over TCP. Most services use TCP.
+                <br><strong>Other option:</strong> UDP (for DNS, video streaming, etc.)
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;port: 8080</code>
+            <div class="explanation">
+                <strong>What it does:</strong> The port the Service listens on (what clients connect to)
+                <br><strong>Why:</strong> Clients call <code>k8s-demo-service:8080</code>
+                <br><strong>Can be different from targetPort</strong> - e.g., Service on 80, Pods on 8080
+            </div>
+        </div>
+
+        <div class="yaml-line">
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;targetPort: 8080</code>
+            <div class="explanation">
+                <strong>What it does:</strong> The port on the Pods that the Service forwards traffic to
+                <br><strong>Why:</strong> Must match <code>containerPort</code> in Deployment (where your app listens)
+                <br><strong>Traffic flow:</strong> Client → Service:8080 → Pod:8080 → Your app
+            </div>
+        </div>
+
+        <h4>Complete service.yaml:</h4>
+        <pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: k8s-demo-service
+spec:
+  type: NodePort
+  selector:
+    app: k8s-demo
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080</code></pre>
+    </div>
+
+    <h2>How They Work Together</h2>
+
+    <div class="diagram">
+1. You create Deployment
+   ↓
+2. Deployment creates 2 Pods (replicas: 2)
+   - Each Pod labeled with app=k8s-demo
+   - Each Pod runs your k8s-demo:v1 container
+   - Each container listens on port 8080
+   ↓
+3. You create Service
+   ↓
+4. Service finds Pods with label app=k8s-demo
+   - Creates stable endpoint (IP + DNS)
+   - Load balances traffic between the 2 Pods
+   ↓
+5. You access: http://&lt;minikube-ip&gt;:&lt;nodeport&gt;/hello
+   ↓
+6. Service routes to → Pod #1 or Pod #2 (round-robin)
+   ↓
+7. Your Spring Boot app responds
+    </div>
+
+    <div class="task">
+        <h3>Now Write the Files Yourself</h3>
+        <p>Create <code>k8s/deployment.yaml</code> and <code>k8s/service.yaml</code> based on the explanations above.</p>
+
+        <p><strong>Don't copy-paste!</strong> Type them out. If you understand each line, you'll remember it.</p>
+
+        <p><strong>Tips:</strong></p>
+        <ul>
+            <li>YAML is indentation-sensitive (use spaces, not tabs)</li>
+            <li>Most fields are 2-space indents</li>
+            <li>Lists use <code>-</code> prefix</li>
+            <li>Check your indentation carefully!</li>
+        </ul>
+    </div>
+
+    <div class="checkpoint">
+        <h3>✓ Deploy and Test</h3>
+        <p>Once you've written both files:</p>
+
+        <pre><code># Apply them
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+
+# Check status
+kubectl get deployments
+kubectl get pods
+kubectl get services
+
+# Test
+minikube service k8s-demo-service --url
+curl $(minikube service k8s-demo-service --url)/hello</code></pre>
+    </div>
+
+    <div class="checkpoint">
+        <h3>🔬 Experiment: Kubernetes Self-Healing</h3>
+        <p>Now see Kubernetes' killer feature in action!</p>
+
+        <h4>Setup - Watch Pods in Real-Time:</h4>
+        <pre><code># Terminal 1: Watch pods continuously
+kubectl get pods -w</code></pre>
+
+        <p>Leave this running. You'll see pod status changes instantly.</p>
+
+        <h4>Setup - Keep Traffic Flowing:</h4>
+        <pre><code># Terminal 2: Port-forward your service
+kubectl port-forward service/k8s-demo-service 8080:8080</code></pre>
+
+        <h4>Setup - Monitor Responses:</h4>
+        <pre><code># Terminal 3: Call endpoint repeatedly
+while true; do curl -s http://localhost:8080/hello | jq '.timestamp'; sleep 1; done</code></pre>
+
+        <p>You'll see timestamps updating every second. Note which Pod names appear in timestamps.</p>
+
+        <h4>The Experiment - Kill a Pod:</h4>
+        <pre><code># Terminal 4: Delete one Pod
+kubectl get pods  # Copy a pod name
+kubectl delete pod &lt;pod-name&gt;</code></pre>
+
+        <p><strong>Watch what happens:</strong></p>
+        <ol>
+            <li><strong>Terminal 1 (pod watch):</strong> Pod goes Terminating → New Pod appears → Running</li>
+            <li><strong>Terminal 3 (curl loop):</strong> Requests keep working! Maybe one fails, but service continues</li>
+            <li><strong>Deployment:</strong> Immediately creates a replacement Pod to maintain <code>replicas: 2</code></li>
+        </ol>
+
+        <div class="diagram">
+Before delete:
+Pod #1 (k8s-demo-abc123) ← DELETE THIS
+Pod #2 (k8s-demo-xyz789) ← Serves traffic
+
+During delete:
+Pod #1 (k8s-demo-abc123) → Terminating...
+Pod #2 (k8s-demo-xyz789) ← All traffic goes here
+Pod #3 (k8s-demo-new456) → Creating...
+
+After delete:
+Pod #2 (k8s-demo-xyz789) ← Serving
+Pod #3 (k8s-demo-new456) ← Serving (new one!)
+
+Deployment says: "I need 2 replicas. Only 1 running? CREATE NEW POD!"
+        </div>
+
+        <p><strong>This is self-healing!</strong> Kubernetes constantly monitors desired state (2 replicas) vs actual state (1 running) and fixes the gap automatically.</p>
+
+        <h4>Try This Too:</h4>
+        <pre><code># Scale down to 1 replica
+kubectl scale deployment k8s-demo --replicas=1
+
+# Watch: One Pod terminates
+# Only 1 Pod remains running
+
+# Scale back up to 2
+kubectl scale deployment k8s-demo --replicas=2
+
+# Watch: New Pod appears!</code></pre>
+
+        <p><strong>Stop the curl loop:</strong> Press Ctrl+C in Terminal 3</p>
+    </div>
+
+    <div class="task">
+        <h3>Commit Your Work</h3>
+        <pre><code>git add k8s/
+git commit -m "Add Kubernetes deployment and service manifests"</code></pre>
+    </div>
+
+    <div class="knowledge">
+        <h3>🤔 Understanding Check</h3>
+        <p>Before moving on, make sure you can answer:</p>
+        <ul>
+            <li>Why do we need a Deployment instead of creating Pods directly?</li>
+            <li>What does <code>replicas: 2</code> actually do?</li>
+            <li>How does the Service find which Pods to route traffic to?</li>
+            <li>What's the difference between <code>port</code> and <code>targetPort</code>?</li>
+            <li>Why <code>imagePullPolicy: Never</code> instead of <code>Always</code>?</li>
+            <li>What happened when you deleted a Pod? Why did a new one appear?</li>
+            <li>Did your service stay up during the Pod deletion? Why?</li>
+        </ul>
+    </div>
+
+</body>
+</html>

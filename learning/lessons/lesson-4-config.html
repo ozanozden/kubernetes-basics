@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 4: ConfigMaps</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 40px; border-left: 4px solid #3498db; padding-left: 15px; }
+        h3 { color: #555; margin-top: 30px; }
+        .concept-box {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        .problem-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        .experiment-box {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+        }
+        .yaml-comment { color: #75715e; }
+        ul, ol { margin-left: 20px; }
+        li { margin: 8px 0; }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background: #3498db;
+            color: white;
+        }
+        tr:nth-child(even) { background: #f9f9f9; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Lesson 4: ConfigMaps (Configuration Management)</h1>
+
+    <div class="concept-box">
+        <strong>What you'll learn:</strong>
+        <ul>
+            <li>How to externalize configuration from container images</li>
+            <li>How ConfigMaps inject environment variables into pods</li>
+            <li>How to change configuration without rebuilding images</li>
+            <li>When to use ConfigMaps vs hardcoded values</li>
+        </ul>
+        <strong>Time:</strong> ~15 minutes
+    </div>
+
+    <div class="problem-box">
+        <strong>🤔 The Problem</strong><br><br>
+        Configuration is hardcoded in your container image. To change a port, log level, or feature flag, you must:
+        <ol>
+            <li>Edit application code/config files</li>
+            <li>Rebuild the image</li>
+            <li>Push to registry</li>
+            <li>Update Kubernetes deployment</li>
+        </ol>
+        This is slow, error-prone, and couples configuration to code.
+        <br><br>
+        <strong>How do you change config without rebuilding the image?</strong>
+    </div>
+
+    <div class="concept-box">
+        <strong>💡 The Solution: ConfigMaps</strong><br><br>
+        A <strong>ConfigMap</strong> is a Kubernetes object that stores non-sensitive configuration as key-value pairs. You can inject these values into pods as:
+        <ul>
+            <li><strong>Environment variables</strong> (simple key-value pairs)</li>
+            <li><strong>Files</strong> (mounted as volumes)</li>
+        </ul>
+        <strong>Benefit:</strong> Change config by updating the ConfigMap, then restart pods. No image rebuild needed.
+    </div>
+
+    <hr>
+
+    <h2>Step 1: Create a ConfigMap</h2>
+
+    <p>Create <code>k8s/configmap.yaml</code>:</p>
+
+    <pre><code>apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-demo-config
+data:
+  <span class="yaml-comment"># Key-value pairs that will become environment variables</span>
+  APP_NAME: "K8s Demo Production"
+  LOG_LEVEL: "INFO"
+  FEATURE_FLAG_ASYNC: "true"</code></pre>
+
+    <div class="concept-box">
+        <strong>Field Breakdown:</strong><br><br>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>What It Is</th>
+                <th>Why We Need It</th>
+            </tr>
+            <tr>
+                <td><code>apiVersion: v1</code></td>
+                <td>ConfigMap API version</td>
+                <td>Tells K8s this is a core v1 resource</td>
+            </tr>
+            <tr>
+                <td><code>kind: ConfigMap</code></td>
+                <td>Resource type</td>
+                <td>Identifies this as configuration data</td>
+            </tr>
+            <tr>
+                <td><code>metadata.name</code></td>
+                <td>Unique name for this ConfigMap</td>
+                <td>Referenced by pods to load config</td>
+            </tr>
+            <tr>
+                <td><code>data</code></td>
+                <td>Key-value pairs (strings only)</td>
+                <td>Your actual configuration values</td>
+            </tr>
+        </table>
+    </div>
+
+    <h2>Step 2: Add Code to Read Configuration</h2>
+
+    <p>Update <code>src/main/java/com/backend/k8sdemo/web/HelloController.java</code> to read environment variables:</p>
+
+    <pre><code>package com.backend.k8sdemo.web;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.Instant;
+import java.util.Map;
+
+@RestController
+public class HelloController {
+
+    <span class="yaml-comment">// Inject environment variables with defaults</span>
+    @Value("${APP_NAME:K8s Demo}")
+    private String appName;
+
+    @Value("${LOG_LEVEL:INFO}")
+    private String logLevel;
+
+    @Value("${FEATURE_FLAG_ASYNC:false}")
+    private boolean asyncEnabled;
+
+    @GetMapping("/hello")
+    public ResponseEntity&lt;Map&lt;String, String&gt;&gt; sayHiToTheWorld(){
+        Map&lt;String, String&gt; response = Map.of(
+                "message", "Hello from Kubernetes!",
+                "version", "1.0",
+                "timestamp", Instant.now().toString()
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    <span class="yaml-comment">// NEW: Endpoint to show configuration</span>
+    @GetMapping("/config")
+    public String config() {
+        return String.format(
+            "App: %s | Log Level: %s | Async: %s",
+            appName, logLevel, asyncEnabled
+        );
+    }
+}</code></pre>
+
+    <div class="concept-box">
+        <strong>What does <code>@Value</code> do?</strong><br><br>
+        <ul>
+            <li><code>@Value("${APP_NAME:K8s Demo}")</code> reads the <code>APP_NAME</code> environment variable</li>
+            <li>The part after <code>:</code> is the default value if env var doesn't exist</li>
+            <li>Spring Boot injects these values when the app starts</li>
+        </ul>
+        This lets you change config without changing code!
+    </div>
+
+    <h2>Step 3: Test Locally with Environment Variables</h2>
+
+    <p>Before deploying, test that the code reads environment variables correctly:</p>
+
+    <pre><code><span class="yaml-comment"># Set environment variables</span>
+export APP_NAME="Local Test"
+export LOG_LEVEL="DEBUG"
+export FEATURE_FLAG_ASYNC="true"
+
+<span class="yaml-comment"># Run the app</span>
+./gradlew bootRun
+
+<span class="yaml-comment"># In another terminal:</span>
+curl http://localhost:8080/config</code></pre>
+
+    <p>Should output: <code>App: Local Test | Log Level: DEBUG | Async: true</code></p>
+
+    <p>Press <code>Ctrl+C</code> to stop the app.</p>
+
+    <h2>Step 4: Rebuild Docker Image</h2>
+
+    <p>The code has changed (added <code>/config</code> endpoint), so rebuild:</p>
+
+    <pre><code><span class="yaml-comment"># 1. Clean and rebuild the JAR</span>
+./gradlew clean bootJar
+
+<span class="yaml-comment"># 2. Build new Docker image</span>
+docker build -t k8s-demo:latest .
+
+<span class="yaml-comment"># 3. Load into minikube</span>
+minikube image load k8s-demo:latest</code></pre>
+
+    <h2>Step 5: Inject ConfigMap into Deployment</h2>
+
+    <p>Update <code>k8s/deployment.yaml</code> to use ConfigMap values as environment variables:</p>
+
+    <pre><code>spec:
+  containers:
+  - name: k8s-demo
+    image: k8s-demo:latest
+    ports:
+    - containerPort: 8080
+    <span class="yaml-comment"># Inject ConfigMap values as environment variables</span>
+    env:
+    - name: APP_NAME
+      valueFrom:
+        configMapKeyRef:
+          name: k8s-demo-config
+          key: APP_NAME
+    - name: LOG_LEVEL
+      valueFrom:
+        configMapKeyRef:
+          name: k8s-demo-config
+          key: LOG_LEVEL
+    - name: FEATURE_FLAG_ASYNC
+      valueFrom:
+        configMapKeyRef:
+          name: k8s-demo-config
+          key: FEATURE_FLAG_ASYNC
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"</code></pre>
+
+    <div class="concept-box">
+        <strong>How Environment Variable Injection Works:</strong><br><br>
+        <ul>
+            <li><code>env</code> - Array of environment variables to set in the container</li>
+            <li><code>name: APP_NAME</code> - The env var name inside the container</li>
+            <li><code>valueFrom.configMapKeyRef</code> - Pull value from a ConfigMap instead of hardcoding</li>
+            <li><code>name: k8s-demo-config</code> - Which ConfigMap to read from</li>
+            <li><code>key: APP_NAME</code> - Which key in that ConfigMap</li>
+        </ul>
+        When the pod starts, Kubernetes reads the ConfigMap and sets <code>APP_NAME</code> environment variable to <code>"K8s Demo Production"</code>.
+    </div>
+
+    <h2>Step 6: Deploy to Kubernetes</h2>
+
+    <pre><code><span class="yaml-comment"># Apply ConfigMap and Deployment</span>
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/deployment.yaml
+
+<span class="yaml-comment"># Force restart to use new image</span>
+kubectl rollout restart deployment/k8s-demo
+kubectl rollout status deployment/k8s-demo</code></pre>
+
+    <div class="experiment-box">
+        <strong>🧪 Experiment: Change Config Without Rebuilding</strong><br><br>
+        <ol>
+            <li><strong>Test the /config endpoint:</strong>
+                <pre><code>kubectl port-forward service/k8s-demo-service 8080:8080
+curl http://localhost:8080/config</code></pre>
+                Should show: <code>App: K8s Demo Production | Log Level: INFO | Async: true</code>
+            </li>
+            <li><strong>Update ConfigMap (no rebuild needed!):</strong>
+                <pre><code>kubectl edit configmap k8s-demo-config
+<span class="yaml-comment"># Change LOG_LEVEL: "INFO" to LOG_LEVEL: "DEBUG"</span>
+<span class="yaml-comment"># Save and exit (:wq in vim)</span></code></pre>
+            </li>
+            <li><strong>Restart pods to pick up new config:</strong>
+                <pre><code>kubectl rollout restart deployment/k8s-demo
+kubectl rollout status deployment/k8s-demo</code></pre>
+            </li>
+            <li><strong>Verify change:</strong>
+                <pre><code>curl http://localhost:8080/config</code></pre>
+                Now shows: <code>App: K8s Demo Production | Log Level: DEBUG | Async: true</code>
+            </li>
+            <li><strong>Check ConfigMap contents:</strong>
+                <pre><code>kubectl get configmap k8s-demo-config -o yaml</code></pre>
+            </li>
+        </ol>
+    </div>
+
+    <h2>ConfigMap Best Practices</h2>
+
+    <div class="concept-box">
+        <strong>✅ Use ConfigMaps For:</strong>
+        <ul>
+            <li>Environment-specific settings (dev/staging/prod)</li>
+            <li>Feature flags</li>
+            <li>Log levels</li>
+            <li>Service URLs (non-sensitive)</li>
+            <li>Application ports</li>
+        </ul>
+
+        <strong>❌ Don't Use ConfigMaps For:</strong>
+        <ul>
+            <li>Passwords, API keys, tokens (use Secrets instead - Lesson 5)</li>
+            <li>Large files (>1MB - use volumes instead)</li>
+            <li>Binary data (base64 bloats YAML)</li>
+        </ul>
+    </div>
+
+    <h2>Alternative: envFrom (Inject All Keys)</h2>
+
+    <p>Instead of mapping each key individually, inject all ConfigMap keys at once:</p>
+
+    <pre><code>spec:
+  containers:
+  - name: k8s-demo
+    image: k8s-demo:latest
+    <span class="yaml-comment"># Inject ALL keys from ConfigMap as env vars</span>
+    envFrom:
+    - configMapRef:
+        name: k8s-demo-config</code></pre>
+
+    <p>This creates environment variables for every key in the ConfigMap automatically.</p>
+
+    <h2>Summary</h2>
+
+    <div class="concept-box">
+        <strong>✅ What you learned:</strong>
+        <ul>
+            <li><strong>ConfigMaps</strong> externalize configuration from images</li>
+            <li><strong>Environment variables</strong> are injected at pod creation time</li>
+            <li><strong>kubectl edit configmap</strong> updates config without rebuilding</li>
+            <li><strong>Restart pods</strong> to pick up new config values</li>
+        </ul>
+
+        <strong>Key Commands:</strong>
+        <pre><code>kubectl get configmap k8s-demo-config -o yaml
+kubectl edit configmap k8s-demo-config
+kubectl rollout restart deployment/k8s-demo</code></pre>
+    </div>
+
+    <hr>
+
+    <p><strong>Next Lesson:</strong> <a href="lesson-5-secrets.html">Secrets (Sensitive Data)</a></p>
+
+    <p><strong>🎉 Great job!</strong> You can now change config without rebuilding Docker images.</p>
+
+</body>
+</html>

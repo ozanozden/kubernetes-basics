@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-demo-config
+data:
+  APP_NAME: "K8s Demo Production"
+  APP_PORT: "8080"
+  LOG_LEVEL: "INFO"
+  FEATURE_FLAG_ASYNC: "true"
