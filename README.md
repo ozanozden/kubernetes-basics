@@ -58,67 +58,66 @@ If you're completely new to Docker:
 
 ## ⚡ Quick Start
 
-### Step 1: Setup (One Time)
+### Two Learning Paths
+
+Choose your approach:
+
+#### Path 1: Learn by Building (Recommended)
+Start with **minimal code** and build up through the lessons:
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/k8s-demo.git
-cd k8s-demo
+git clone https://github.com/ozanozden/kubernetes-basics.git
+cd kubernetes-basics
 
-# Run setup script (builds the app, loads into minikube)
+# Checkout the init branch (minimal starting state)
+git checkout init
+
+# Run setup script
 ./scripts/setup.sh
 ```
 
-**What this does:**
-- ✅ Checks you have Docker, minikube, kubectl
-- ✅ Starts minikube
-- ✅ Builds the demo app (Spring Boot REST API)
-- ✅ Creates Docker image
-- ✅ Loads image into minikube
+**What you get:**
+- Minimal Spring Boot app (only `/hello` endpoint)
+- No Kubernetes manifests
+- No actuator, no config handling
+- You'll add everything through lessons 1-5
 
-**Time:** ~2 minutes
+**Start here:** [Lesson 1](learning/lessons/lesson-1-kubernetes-basics.html)
 
-### Step 2: Clean Your Workspace (Recommended for Learning)
-
-To learn by doing from scratch, delete the pre-made manifests:
+#### Path 2: Learn by Exploring
+Start with the **finished application** and explore:
 
 ```bash
-# Delete pre-made Kubernetes manifests
-rm -rf k8s/
+# Clone the repo
+git clone https://github.com/ozanozden/kubernetes-basics.git
+cd kubernetes-basics
+
+# Stay on main branch (finished state)
+# Run setup script
+./scripts/setup.sh
 ```
 
-**Note:** The `main` branch has the **finished state** with all code complete. Each lesson will guide you to add the necessary code (endpoints, dependencies) and rebuild the app.
+**What you get:**
+- Complete Spring Boot app with all endpoints
+- All Kubernetes manifests (deployment, service, configmap, secret)
+- Production-ready configuration
+- You'll explore and understand how it all works
 
-### Step 3: Start Learning!
-
-```bash
-# Open Lesson 1 in your browser
-open learning/lessons/lesson-1-kubernetes-basics.html
-
-# Or read the Markdown version
-cat learning/lessons/lesson-1-kubernetes-basics.md
-```
-
-**Follow the lessons in order.** Each builds on the previous one.
+Both paths use the same lessons - choose based on your learning style!
 
 ---
 
-## 📖 Learning Philosophy
+## 🎓 Teaching Philosophy
 
-This tutorial follows the **"Challenges first, explanations second"** approach:
+This tutorial follows a unique approach:
 
-✅ **Type code yourself** - No copy-paste, understand every line  
-✅ **Understand WHY** - Every YAML field explained (what it does + why you need it)  
-✅ **Learn by breaking things** - Delete pods, watch self-healing, experiment  
-✅ **Progressive complexity** - Start simple, add features lesson by lesson  
-✅ **Git-tracked progress** - Commit after each lesson
+1. **Kubernetes First** - Focus on K8s concepts, not Spring Boot internals
+2. **Complete Workflow** - Code changes → local testing → Docker rebuild → K8s deploy
+3. **Hands-On** - You'll type commands, see results, break things, fix them
+4. **Production-Ready** - Learn patterns used in real applications
 
-**Not a typical tutorial:**
-- ❌ No theoretical intro chapters
-- ❌ No "Here's a wall of YAML, run it"
-- ❌ No glossary-first learning
-
-Instead: Deploy something → Break it → Understand why → Fix it → Deploy better version
+Read more: [TEACHING-APPROACH.md](TEACHING-APPROACH.md)
 
 ---
 
