@@ -525,9 +525,11 @@ kubectl get deployments
 kubectl get pods
 kubectl get services
 
-# Test
-minikube service k8s-demo-service --url
-curl $(minikube service k8s-demo-service --url)/hello</code></pre>
+# Test - port forward in one terminal
+kubectl port-forward service/k8s-demo-service 8080:8080
+
+# Then in another terminal, test the endpoint
+curl http://localhost:8080/hello</code></pre>
     </div>
 
     <div class="checkpoint">
