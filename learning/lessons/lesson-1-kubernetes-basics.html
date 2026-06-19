@@ -276,7 +276,7 @@ If traffic increases → Deployment scales up
         </div>
 
         <div class="yaml-line">
-            <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image: k8s-demo:v1</code>
+            <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image: k8s-demo:latest</code>
             <div class="explanation">
                 <strong>What it does:</strong> Specifies which Docker image to run.
                 <br><strong>Why:</strong> This is your containerized app! K8s pulls this image and runs it.
@@ -331,7 +331,7 @@ spec:
     spec:
       containers:
       - name: k8s-demo
-        image: k8s-demo:v1
+        image: k8s-demo:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 8080</code></pre>
@@ -481,7 +481,7 @@ spec:
    ↓
 2. Deployment creates 2 Pods (replicas: 2)
    - Each Pod labeled with app=k8s-demo
-   - Each Pod runs your k8s-demo:v1 container
+   - Each Pod runs your k8s-demo:latest container
    - Each container listens on port 8080
    ↓
 3. You create Service
